@@ -21,6 +21,7 @@ SECTION_TITLES = {
 }
 SUBSECTION_TITLES = {
     "(1동의건물의표시)": "building",
+    "(건물의표시)": "building",  # 일반건물(다가구·단독) 등기부
     "(대지권의목적인토지의표시)": "land",
     "(전유부분의건물의표시)": "unit",
     "(대지권의표시)": "land_right",

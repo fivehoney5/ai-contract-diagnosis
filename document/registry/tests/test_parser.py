@@ -184,6 +184,23 @@ class EntriesTest(unittest.TestCase):
         self.assertEqual(len(es), 1)
         self.assertEqual(es[0].holder, "가상은행")
 
+    def test_moved_rank_and_partial_strike(self):
+        # '1(전2)'는 옛 등기부에서 옮겨 온 표시. 표시변경으로 주소 줄만 그어진 행(30%)은 살아 있음
+        es = build_entries([
+            R("eul", "1(전2)", "전세권설정", "전세금 금20,000,000원", struck=1.0),
+            R("eul", "2", "1번전세권설정등기말소"),
+            R("eul", "3", "근저당권설정", "채권최고액 금100,000,000원", struck=0.3),
+        ])
+        self.assertEqual(by_rank(es, "eul", "1").cancel_basis, ["strike", "note"])
+        self.assertEqual(by_rank(es, "eul", "3").status, "active")
+
+    def test_short_continuation_does_not_flip_strike(self):
+        rows = [
+            R("eul", "1", "주택임차권", "임차보증금 금60,000,000원\n임차권자 최가상\n임차권등기명령", struck=1.0),
+            Row("eul", None, {"rank": "", "purpose": "", "receipt": "", "cause": "", "holder": "결정"}, 0.0, 2),
+        ]
+        self.assertEqual(build_entries(rows)[0].status, "cancelled")
+
     def test_no_personal_data_in_entries(self):
         es = build_entries([R("gap", "1", "소유권이전", "소유자 김가상 800101-1000000 서울특별시 가상구", cause="매매")])
         text = str([e.to_dict() for e in es])
@@ -206,6 +223,14 @@ class TitleTest(unittest.TestCase):
         self.assertEqual(t["address"], "서울특별시 강서구 가상동 123-4")
         self.assertEqual(t["address_display"], "서울특별시 강서구 가상동 123-4 제3층 제302호")
         self.assertFalse(t["has_land_right"])
+
+    def test_general_building(self):
+        # 일반건물(다가구 등)은 전유부분이 없어서 구조만 건물내역에서 꺼낸다
+        rows = [T("building", {"rank": "1", "location": "서울특별시 가상구 가상동 1",
+                               "detail": "철근콘크리트조 슬래브지붕\n4층\n다가구주택\n1층 100.00㎡"})]
+        t = parse_title(rows, "[건물] 서울특별시 가상구 가상동 1")
+        self.assertEqual(t["structure"], "철근콘크리트조")
+        self.assertIsNone(t["exclusive_area_m2"])
 
 
 class FlagsTest(unittest.TestCase):

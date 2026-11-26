@@ -194,7 +194,8 @@ def mask_holder(holder_text: str | None) -> str | None:
 
 
 def _rank_key(rank: str) -> str:
-    return norm(rank)
+    """'1(전2)'처럼 옛 등기부에서 옮겨 온 표시는 떼고 순위번호만 남긴다."""
+    return re.sub(r"\(전\d+(?:-\d+)?\)", "", norm(rank))
 
 
 def _merge_continuations(rows: list[Row]) -> list[Row]:
@@ -203,11 +204,14 @@ def _merge_continuations(rows: list[Row]) -> list[Row]:
     for r in rows:
         if out and not norm(r.cells.get("rank")) and out[-1].section == r.section and out[-1].subsection == r.subsection:
             prev = out[-1]
+            n_prev = len(norm("".join(prev.cells.values())))
+            n_cur = len(norm("".join(r.cells.values())))
             for k, v in r.cells.items():
                 if v:
                     prev.cells[k] = (prev.cells.get(k, "") + "\n" + v).strip()
-            # 글자 수 가중 평균 대신 단순히 둘 다 말소일 때만 말소로 본다
-            prev.struck_ratio = min(prev.struck_ratio, r.struck_ratio)
+            # 취소선 비율은 글자 수로 가중 평균 (짧은 이어진 줄이 판정을 뒤집지 않게)
+            if n_prev + n_cur:
+                prev.struck_ratio = (prev.struck_ratio * n_prev + r.struck_ratio * n_cur) / (n_prev + n_cur)
             continue
         out.append(Row(r.section, r.subsection, dict(r.cells), r.struck_ratio, r.page, list(r.raw_cells)))
     return out
@@ -308,6 +312,10 @@ def parse_title(rows: list[Row], header_text: str = "") -> dict:
             area = float(m.group(1))
         s = re.split(r"[\d.]+\s*㎡", " ".join(detail.split()))[0].strip()
         structure = s or None
+    elif building is not None:
+        # 일반건물은 전유부분이 없다. 구조만 건물내역 첫 부분에서 꺼내고 면적은 비워 둔다
+        m = re.match(r"\S+?조(?=\s|$)", " ".join(building.cells.get("detail", "").split()))
+        structure = m.group(0) if m else None
 
     all_title_text = " ".join(norm(" ".join(r.raw_cells)) for r in rows if r.section == "title")
     separate_land = "별도등기있음" in all_title_text
