@@ -48,6 +48,10 @@ class RTMSApiError(RuntimeError):
     """API가 오류 코드를 돌려줬거나 응답을 해석할 수 없을 때."""
 
 
+class RTMSParseError(RTMSApiError):
+    """API 응답이 XML 형식이 아니라서 해석할 수 없을 때 (분석 결과의 PARSE_FAILED)."""
+
+
 @dataclass(frozen=True)
 class Trade:
     property_type: str  # apt / officetel / rowhouse
@@ -123,7 +127,7 @@ def parse_response(xml_text: str, property_type: str) -> tuple[list[Trade], int]
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError as e:
-        raise RTMSApiError(f"XML 응답을 해석할 수 없습니다: {xml_text[:200]!r}") from e
+        raise RTMSParseError(f"XML 응답을 해석할 수 없습니다: {xml_text[:200]!r}") from e
 
     # 게이트웨이 오류 형식 (인증키 오류 등)
     if root.tag == "OpenAPI_ServiceResponse":
