@@ -37,7 +37,8 @@ def parse_ho(text: str | None) -> int | None:
 
 
 def _address_lot(a: dict) -> tuple[str, bool, int, int] | None:
-    dong = a.get("legal_dong_name")
+    # 읍·면 지역은 legal_dong_name이 "오남읍"이고 등기부 지번 앞은 리 이름("양지리")이라 리 이름을 우선
+    dong = a.get("ri_name") or a.get("legal_dong_name")
     if dong and a.get("bun"):
         try:
             return dong, bool(a.get("is_mountain")), int(a["bun"]), int(a.get("ji") or 0)

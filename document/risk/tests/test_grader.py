@@ -392,5 +392,33 @@ class AddressMatchTest(unittest.TestCase):
         self.assertEqual(r["grade"], "안전")
 
 
+class ReviewFix2Test(unittest.TestCase):
+    """PR #9 두 번째 리뷰 반영."""
+
+    def test_eup_myeon_uses_ri_name(self):
+        a = address_ok(jibun=None, legal_dong_name="오남읍", ri_name="양지리", bun="0005", ji="0000", ho=None)
+        reg = registry_at("경기도 남양주시 오남읍 양지리 5")
+        self.assertEqual(compare(a, reg), {"match": True, "diff": []})
+
+    def test_eup_myeon_jibun_text_fallback(self):
+        a = address_ok(jibun="경기도 남양주시 오남읍 양지리 5", ho=None)
+        self.assertTrue(compare(a, registry_at("경기도 남양주시 오남읍 양지리 5"))["match"])
+
+    def test_multi_household_floor_caution(self):
+        reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
+        r = full(price=price_part(price=400_000_000), registry=reg)
+        self.assertEqual(r["grade"], "주의")
+
+    def test_floor_does_not_lower_danger(self):
+        reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
+        self.assertEqual(full(price=price_part(price=240_000_000), registry=reg)["grade"], "위험")
+
+    def test_floor_configurable_to_hold(self):
+        reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
+        cfg = RiskConfig(grade_floor={"HIDDEN_SENIOR_CLAIM_CHECK_NEEDED": "판단보류"})
+        self.assertEqual(full(price=price_part(price=400_000_000), registry=reg, config=cfg)["grade"], "판단보류")
+        self.assertEqual(full(price=price_part(price=400_000_000), registry=reg, config=RiskConfig(grade_floor={}))["grade"], "안전")
+
+
 if __name__ == "__main__":
     unittest.main()

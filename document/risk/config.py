@@ -27,6 +27,7 @@ SENIOR_BURDEN_HIGH = "SENIOR_BURDEN_HIGH"
 NO_BUILDING_TRADES = "NO_BUILDING_TRADES"
 REGISTRY_ADDRESS_MISMATCH = "REGISTRY_ADDRESS_MISMATCH"
 PRICE_INFLATION_SUSPECTED = "PRICE_INFLATION_SUSPECTED"
+HIDDEN_SENIOR_CLAIM_CHECK_NEEDED = "HIDDEN_SENIOR_CLAIM_CHECK_NEEDED"
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,11 @@ class RiskConfig:
 
     # 입력 주소와 등기부 주소가 다르면 위험 신호가 있어도 판단보류 (다른 집 등기부일 수 있음) [초안]
     address_mismatch_holds_grade: bool = True
+
+    # 등급 하한: 이 신호가 있으면 등급이 안전이어도 이 등급까지 올린다 [초안, 팀 결정]
+    #   다가구 등 비집합건물: 다른 세입자 보증금이 등기부에 없어 선순위가 실제보다 적을 수 있음 (#8)
+    #   판단보류로 두면 다가구는 항상 판정이 안 나오므로 기본은 "최소 주의". "판단보류"로 바꿀 수도 있음
+    grade_floor: dict = field(default_factory=lambda: {HIDDEN_SENIOR_CLAIM_CHECK_NEEDED: GRADE_CAUTION})
 
 
 DEFAULT_CONFIG = RiskConfig()

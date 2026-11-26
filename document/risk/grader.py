@@ -133,6 +133,7 @@ def decide_grade(flags: list[dict], items: list[dict], cfg: RiskConfig = DEFAULT
     2. 판단보류 대상 부분(cfg.hold_parts)이 ok가 아니면 판단보류.
     3. 선순위 부담률을 계산하지 못했으면 판단보류 (price_card를 넘긴 경우).
     4. 그 밖에는 가장 높은 level. 확인필요는 반영하지 않고, 신호가 없으면 안전.
+    5. cfg.grade_floor에 있는 신호가 있으면 그 등급보다 낮게 두지 않음 (다가구 최소 주의 등).
     """
     if cfg.address_mismatch_holds_grade and any(f["code"] == REGISTRY_ADDRESS_MISMATCH for f in flags):
         return GRADE_HOLD
@@ -146,9 +147,15 @@ def decide_grade(flags: list[dict], items: list[dict], cfg: RiskConfig = DEFAULT
         return GRADE_HOLD
     if cfg.hold_when_senior_ratio_missing and price_card is not None and price_card.get("senior_burden_ratio") is None:
         return GRADE_HOLD
-    if not levels:
-        return GRADE_SAFE
-    return max(levels, key=_rank)  # 안전·주의 level 이름이 등급 이름과 같음
+    grade = max(levels, key=_rank) if levels else GRADE_SAFE  # 안전·주의 level 이름이 등급 이름과 같음
+    codes = {f["code"] for f in flags}
+    floors = [g for c, g in cfg.grade_floor.items() if c in codes]
+    if GRADE_HOLD in floors:
+        return GRADE_HOLD
+    for g in floors:
+        if _rank(g) > _rank(grade):
+            grade = g
+    return grade
 
 
 # ---------- 부분 결과 정리 ----------
