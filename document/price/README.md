@@ -116,6 +116,7 @@ API 오류도 예외 대신 `data_status_item`의 실패 코드로 돌려줍니�
 | `NO_BUILDING_TRADES` | 주의 | 신축인데 같은 건물 거래가 없음 (`value` 0, `threshold` 1) |
 | `PRICE_INFLATION_SUSPECTED` | 주의 (임시) | 신축 ㎡당 가격이 같은 동 비슷한 면적·연식 거래보다 30% 넘게 높음 (`value`는 초과 비율) |
 | `NON_RESIDENTIAL` | 주의 (임시) | 건축물대장 주용도 또는 해당 호 용도가 주거용이 아님 |
+| `UNIT_PURPOSE_CHECK_NEEDED` | 확인필요 | `ho_nm`으로 조회한 같은 호수가 여러 건(보통 다른 동)이고 주거용 여부가 갈림. 첫 결과로 판정하지 않음. `dong_nm`을 넣으면 해결 |
 | `VIOLATION_BUILDING_CHECK_NEEDED` | 확인필요 | 항상. 공공데이터 API에는 위반건축물 항목이 없어 열람본으로 확인해야 함 |
 
 ## 시세를 정하는 방법
@@ -159,6 +160,7 @@ API 오류도 예외 대신 `data_status_item`의 실패 코드로 돌려줍니�
 - 동마다 사용승인일이 다르면 가장 늦은 날짜를 씁니다.
 - 건축물대장 조회가 실패해도 시세 추정은 계속하고 `detail.notes`에 이유를 남깁니다.
 - 1층만 근린생활시설인 빌라가 많아서 계약서의 동·호를 `dong_nm`, `ho_nm`으로 넣는 것이 정확합니다.
+- 동 없이 호만 넣었는데 같은 호수가 여러 동에 있으면: 용도가 모두 같으면 그대로 판정하고, 다르면 판정하지 않고 `UNIT_PURPOSE_CHECK_NEEDED`를 남깁니다.
 
 ## 나중에 붙일 기능과 연결 지점
 

@@ -11,6 +11,7 @@ from datetime import date
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))  # 저장소 루트
 
 from document.price.building_register import (  # noqa: E402
+    CHECK_UNIT_PURPOSE,
     FLAG_NON_RESIDENTIAL,
     BuildingInfo,
     BuildingRegisterError,
@@ -120,6 +121,39 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(info.unit_purpose, "소매점")
         self.assertEqual(info.flags, [FLAG_NON_RESIDENTIAL])
         self.assertEqual(s.calls[1][1]["hoNm"], "101")
+
+    def test_same_ho_in_two_dongs_with_different_purpose_needs_check(self):
+        s = FakeSession({
+            "getBrTitleInfo": resp([title("A동"), title("B동")]),
+            "getBrExposPubuseAreaInfo": resp([unit("101", "02000", "다세대주택", dong="A동"),
+                                              unit("101", "03000", "소매점", dong="B동")]),
+        })
+        info = fetch_building_info("1150010300", "355-14", ho_nm="101", service_key="k", session=s)
+        self.assertIsNone(info.unit_is_residential)
+        self.assertEqual(info.flags, [])  # 첫 결과로 판정하지 않음
+        self.assertIn(CHECK_UNIT_PURPOSE, info.checks_needed)
+        self.assertTrue(any("A동, B동" in n for n in info.notes))
+
+    def test_same_ho_in_two_dongs_with_same_purpose_is_judged(self):
+        s = FakeSession({
+            "getBrTitleInfo": resp([title("A동"), title("B동")]),
+            "getBrExposPubuseAreaInfo": resp([unit("101", "02000", "다세대주택", dong="A동"),
+                                              unit("101", "02000", "다세대주택", dong="B동")]),
+        })
+        info = fetch_building_info("1150010300", "355-14", ho_nm="101", service_key="k", session=s)
+        self.assertTrue(info.unit_is_residential)
+        self.assertNotIn(CHECK_UNIT_PURPOSE, info.checks_needed)
+
+    def test_dong_nm_picks_that_unit(self):
+        s = FakeSession({
+            "getBrTitleInfo": resp([title("A동"), title("B동")]),
+            "getBrExposPubuseAreaInfo": resp([unit("101", "02000", "다세대주택", dong="A동"),
+                                              unit("101", "03000", "소매점", dong="B동")]),
+        })
+        info = fetch_building_info("1150010300", "355-14", dong_nm="B동", ho_nm="101", service_key="k", session=s)
+        self.assertFalse(info.unit_is_residential)
+        self.assertEqual(info.flags, [FLAG_NON_RESIDENTIAL])
+        self.assertNotIn(CHECK_UNIT_PURPOSE, info.checks_needed)
 
     def test_not_found(self):
         s = FakeSession({"getBrTitleInfo": resp([])})

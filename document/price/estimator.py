@@ -61,6 +61,7 @@ from statistics import median
 from typing import Callable
 
 from .building_register import (
+    CHECK_MESSAGES,
     CHECK_VIOLATION,
     CHECK_VIOLATION_MESSAGE,
     BuildingInfo,
@@ -144,7 +145,7 @@ class PriceEstimate:
 
     @property
     def check_messages(self) -> list[str]:
-        return [CHECK_VIOLATION_MESSAGE for c in self.checks_needed if c == CHECK_VIOLATION]
+        return [CHECK_MESSAGES[c] for c in self.checks_needed if c in CHECK_MESSAGES]
 
     @property
     def confidence_label(self) -> str | None:

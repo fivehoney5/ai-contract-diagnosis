@@ -36,6 +36,9 @@ FLAG_NON_RESIDENTIAL = "NON_RESIDENTIAL"  # 주용도(또는 해당 호 용도)�
 FLAG_VIOLATION_BUILDING = "VIOLATION_BUILDING"  # 위반건축물 (지금 API로는 알 수 없음, 나중에 채움)
 CHECK_VIOLATION = "VIOLATION_BUILDING_CHECK_NEEDED"  # 위반건축물 여부를 사람이 확인해야 함
 CHECK_VIOLATION_MESSAGE = "위반건축물 여부 확인 필요: 정부24·세움터에서 건축물대장을 열람해 '위반건축물' 표시가 있는지 확인하세요."
+CHECK_UNIT_PURPOSE = "UNIT_PURPOSE_CHECK_NEEDED"  # 같은 호가 여러 건이고 용도가 달라 어느 호인지 사람이 확인해야 함
+CHECK_UNIT_PURPOSE_MESSAGE = "호 용도 확인 필요: 같은 호수가 여러 동에 있고 용도가 달라 판정하지 않았습니다. 계약서의 동을 넣어 다시 조회하세요."
+CHECK_MESSAGES = {CHECK_VIOLATION: CHECK_VIOLATION_MESSAGE, CHECK_UNIT_PURPOSE: CHECK_UNIT_PURPOSE_MESSAGE}
 
 _JIBUN_PARSE_RE = re.compile(r"^(산\s*)?(\d+)(?:-(\d+))?$")
 
@@ -204,12 +207,22 @@ def fetch_building_info(
             params["dongNm"] = dong_nm
         units = [u for u in _call(http, EXPOS_OP, params, timeout) if _t(u, "exposPubuseGbCdNm") == "전유"]
         units = [u for u in units if _t(u, "hoNm") == ho_nm and (not dong_nm or _t(u, "dongNm") == dong_nm)]
-        if units:
-            u = units[0]
-            info.unit_purpose = _t(u, "mainPurpsCdNm") or _t(u, "etcPurps")
-            info.unit_is_residential = is_residential_purpose(
-                _t(u, "mainPurpsCd"), _t(u, "mainPurpsCdNm"), _t(u, "etcPurps")
+        judged = [
+            (u, is_residential_purpose(_t(u, "mainPurpsCd"), _t(u, "mainPurpsCdNm"), _t(u, "etcPurps")))
+            for u in units
+        ]
+        if len({res for _, res in judged}) > 1:
+            # 같은 호수가 여러 건(보통 동이 다름)이고 주거용 여부가 갈리면 첫 결과로 정하지 않는다
+            dongs = sorted({_t(u, "dongNm") or "(동 없음)" for u in units})
+            info.checks_needed.append(CHECK_UNIT_PURPOSE)
+            info.notes.append(
+                f"{ho_nm}호가 {len(units)}건({', '.join(dongs)})이고 용도가 달라 호 용도를 판정하지 않았습니다 "
+                "(dong_nm에 계약서의 동을 넣어 주세요)."
             )
+        elif units:
+            u, res = judged[0]  # 후보가 여러 건이어도 주거용 여부가 모두 같으면 그대로 판정
+            info.unit_purpose = _t(u, "mainPurpsCdNm") or _t(u, "etcPurps")
+            info.unit_is_residential = res
             if not info.unit_is_residential and FLAG_NON_RESIDENTIAL not in info.flags:
                 info.flags.append(FLAG_NON_RESIDENTIAL)
                 info.notes.append(f"{ho_nm}호의 전유부 용도가 주거용이 아닙니다: {info.unit_purpose}")

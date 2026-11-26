@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from .building_register import CHECK_VIOLATION, FLAG_NON_RESIDENTIAL, parse_jibun
+from .building_register import CHECK_UNIT_PURPOSE, CHECK_VIOLATION, FLAG_NON_RESIDENTIAL, parse_jibun
 from .estimator import (
     BUILD_YEAR_UNKNOWN,
     BUILDING_NOT_IDENTIFIED,
@@ -121,6 +121,11 @@ def price_flags(
                 "공공데이터 건축물대장 API (주용도 또는 해당 호 전유부 용도가 주거용이 아님)",
             ))
     checks = est.checks_needed if est is not None else [CHECK_VIOLATION]
+    if CHECK_UNIT_PURPOSE in checks:
+        flags.append(_flag(
+            CHECK_UNIT_PURPOSE, LEVEL_CHECK, None, None,
+            "공공데이터 건축물대장 API 전유부 (같은 호수가 여러 건이고 용도가 달라 동 확인 필요)",
+        ))
     if CHECK_VIOLATION in checks:
         flags.append(_flag(CHECK_VIOLATION, LEVEL_CHECK, None, None, VIOLATION_SOURCE))
     return flags

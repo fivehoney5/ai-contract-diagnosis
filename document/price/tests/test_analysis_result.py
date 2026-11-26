@@ -186,6 +186,18 @@ class OtherTests(unittest.TestCase):
         r = run(OK_TRADES, building_fetcher=reg)
         self.assertIn("NON_RESIDENTIAL", [f["code"] for f in r["flags"]])
 
+    def test_unit_purpose_check_flag(self):
+        def reg(bjdong_cd, jibun, **kw):
+            info = BuildingInfo("11500", "10300", jibun, True, build_year=2016)
+            info.checks_needed.append("UNIT_PURPOSE_CHECK_NEEDED")
+            return info
+
+        r = run(OK_TRADES, building_fetcher=reg)
+        codes = {f["code"]: f["level"] for f in r["flags"]}
+        self.assertEqual(codes["UNIT_PURPOSE_CHECK_NEEDED"], "확인필요")
+        self.assertIn("VIOLATION_BUILDING_CHECK_NEEDED", codes)
+        self.assertTrue(r["detail"]["check_messages"][1].startswith("호 용도 확인 필요"))
+
     def test_address_key(self):
         self.assertEqual(make_address_key("1150010300", "355-14"), "1150010300-0355-0014")
         self.assertEqual(make_address_key("1150010300", "316"), "1150010300-0316-0000")
