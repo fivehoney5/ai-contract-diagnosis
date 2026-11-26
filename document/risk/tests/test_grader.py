@@ -12,8 +12,10 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))  # 저장소 루트
 sys.path.insert(0, ROOT)
 
+from document.risk.address_match import compare, parse_ho, parse_lot  # noqa: E402
 from document.risk import (  # noqa: E402
     RiskConfig,
+    address_flags,
     band_level,
     build_analysis_result,
     decide_grade,
@@ -281,6 +283,113 @@ class PartsTest(unittest.TestCase):
         r = build_analysis_result()
         self.assertTrue(r["analyzed_at"].endswith("+09:00"))
         self.assertEqual(r["data_status"]["overall"], "incomplete")
+
+
+class ReviewFixTest(unittest.TestCase):
+    """PR #9 리뷰 반영."""
+
+    def test_senior_unknown_holds(self):
+        # 등기부 ok인데 금액을 못 읽어 senior_amount_used=None (+ SENIOR_AMOUNT_UNREADABLE 확인필요)
+        reg = registry_part(senior=None, flags=[flag("SENIOR_AMOUNT_UNREADABLE", "확인필요", 1, 1)])
+        r = full(registry=reg)
+        self.assertIsNone(r["price_card"]["senior_burden_ratio"])
+        self.assertEqual(r["grade"], "판단보류")
+
+    def test_senior_unknown_but_danger(self):
+        r = full(price=price_part(price=240_000_000), registry=registry_part(senior=None))
+        self.assertEqual(r["grade"], "위험")
+
+    def test_senior_unknown_hold_can_be_turned_off(self):
+        r = full(registry=registry_part(senior=None), config=RiskConfig(hold_when_senior_ratio_missing=False))
+        self.assertEqual(r["grade"], "안전")
+
+    def test_low_confidence_over_100pct_stays_danger(self):
+        # 선순위 부담률 1.5 (250M+200M)/300M
+        r = full(price=price_part(confidence="낮음"), registry=registry_part(senior=250_000_000))
+        by = {f["code"]: f for f in r["flags"]}
+        self.assertEqual(by["SENIOR_BURDEN_HIGH"]["level"], "위험")
+        self.assertIn("깡통전세 기준(팀 확인 필요)", by["SENIOR_BURDEN_HIGH"]["source"])
+        self.assertEqual(r["grade"], "위험")
+
+    def test_low_confidence_exactly_100pct_stays_danger(self):
+        r = full(price=price_part(price=200_000_000, confidence="낮음"))  # 전세가율 1.0
+        by = {f["code"]: f for f in r["flags"]}
+        self.assertEqual(by["JEONSE_RATIO_HIGH"]["level"], "위험")
+
+    def test_low_confidence_under_100pct_capped(self):
+        r = full(price=price_part(confidence="낮음"), registry=registry_part(senior=80_000_000))  # 0.9333
+        by = {f["code"]: f for f in r["flags"]}
+        self.assertEqual(by["SENIOR_BURDEN_HIGH"]["level"], "주의")
+        self.assertEqual(r["grade"], "주의")
+
+
+def address_ok(jibun="서울특별시 강서구 가상동 123-4", ho="401", **extra):
+    a = {"address_key": "1150010300-0123-0004", "jibun_address": jibun, "ho_nm": ho}
+    a.update(extra)
+    return {"status": "ok", "reason_code": None, "reason": None, "address": a}
+
+
+def registry_at(display, unit_no=None, **kw):
+    reg = registry_part(**kw)
+    reg["property"]["address_display"] = display
+    reg["property"]["unit_no"] = unit_no
+    return reg
+
+
+class AddressMatchTest(unittest.TestCase):
+    def test_parse_lot(self):
+        self.assertEqual(parse_lot("서울특별시 강서구 화곡동 355-14 제4층 제401호"), ("화곡동", False, 355, 14))
+        self.assertEqual(parse_lot("경기도 남양주시 오남읍 양지리 산 12"), ("양지리", True, 12, 0))
+        self.assertEqual(parse_lot("서울특별시 종로구 종로1가 24"), ("종로1가", False, 24, 0))
+        self.assertIsNone(parse_lot("서울특별시 강서구 화곡로 123"))
+        self.assertIsNone(parse_lot(None))
+
+    def test_parse_ho(self):
+        self.assertEqual(parse_ho("제4층 제401호"), 401)
+        self.assertEqual(parse_ho("401"), 401)
+        self.assertIsNone(parse_ho("제4층"))
+
+    def test_same_home_no_flag(self):
+        reg = registry_at("서울특별시 강서구 가상동 123-4 제4층 제401호", "제4층 제401호")
+        r = full(address=address_ok(), registry=reg)
+        self.assertNotIn("REGISTRY_ADDRESS_MISMATCH", [f["code"] for f in r["flags"]])
+        self.assertEqual(r["grade"], "안전")
+
+    def test_uses_structured_lot_fields(self):
+        a = address_ok(jibun=None, legal_dong_name="가상동", bun="0123", ji="0004", is_mountain=False)
+        self.assertEqual(compare(a, registry_at("서울특별시 강서구 가상동 123-4"))["match"], True)
+
+    def test_different_lot_holds(self):
+        reg = registry_at("서울특별시 강서구 가상동 123-5", flags=[flag("OWNERSHIP_RESTRICTED", "위험", 1, 1)])
+        r = full(address=address_ok(), registry=reg)
+        f = [f for f in r["flags"] if f["code"] == "REGISTRY_ADDRESS_MISMATCH"][0]
+        self.assertEqual(f["level"], "확인필요")
+        self.assertIn("지번", f["source"])
+        self.assertEqual(r["grade"], "판단보류")  # 위험 신호가 있어도 판단보류
+
+    def test_different_ho_holds(self):
+        reg = registry_at("서울특별시 강서구 가상동 123-4 제3층 제301호", "제3층 제301호")
+        r = full(address=address_ok(), registry=reg)
+        f = [f for f in r["flags"] if f["code"] == "REGISTRY_ADDRESS_MISMATCH"][0]
+        self.assertIn("호수", f["source"])
+        self.assertEqual(r["grade"], "판단보류")
+
+    def test_ho_missing_on_one_side_not_compared(self):
+        r = full(address=address_ok(ho=None), registry=registry_at("서울특별시 강서구 가상동 123-4", "제3층 제301호"))
+        self.assertEqual(address_flags(address_ok(ho=None), registry_at("서울특별시 강서구 가상동 123-4")), [])
+        self.assertEqual(r["grade"], "안전")
+
+    def test_not_comparable(self):
+        self.assertIsNone(compare(None, registry_part()))
+        self.assertIsNone(compare(address_ok(), registry_part(failed=True)))
+        self.assertIsNone(compare(address_ok(), registry_at(None)))
+        failed = {"status": "failed", "reason_code": "ADDRESS_NOT_FOUND", "reason": "x", "address": None}
+        self.assertIsNone(compare(failed, registry_part()))
+
+    def test_mismatch_hold_can_be_turned_off(self):
+        reg = registry_at("서울특별시 강서구 가상동 123-5")
+        r = full(address=address_ok(), registry=reg, config=RiskConfig(address_mismatch_holds_grade=False))
+        self.assertEqual(r["grade"], "안전")
 
 
 if __name__ == "__main__":

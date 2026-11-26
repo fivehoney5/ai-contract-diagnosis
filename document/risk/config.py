@@ -25,6 +25,7 @@ LEVEL_RANK = {LEVEL_CHECK: 0, LEVEL_SAFE: 1, LEVEL_CAUTION: 2, LEVEL_DANGER: 3}
 JEONSE_RATIO_HIGH = "JEONSE_RATIO_HIGH"
 SENIOR_BURDEN_HIGH = "SENIOR_BURDEN_HIGH"
 NO_BUILDING_TRADES = "NO_BUILDING_TRADES"
+REGISTRY_ADDRESS_MISMATCH = "REGISTRY_ADDRESS_MISMATCH"
 PRICE_INFLATION_SUSPECTED = "PRICE_INFLATION_SUSPECTED"
 
 
@@ -49,6 +50,15 @@ class RiskConfig:
     hold_parts: frozenset = field(default_factory=lambda: frozenset({"price", "registry"}))
     # 특약 추출 실패는 특약 부분만 판단보류로 두고 전체 등급에는 반영하지 않음 [초안]
     special_terms_failure_holds_grade: bool = False
+    # 시세·등기부가 ok여도 선순위 부담률을 계산하지 못하면(선순위 금액을 못 읽음 등) 판단보류
+    hold_when_senior_ratio_missing: bool = True
+
+    # 비율이 이 값 이상이면 시세 신뢰도가 낮아도 위험을 낮추지 않음 (깡통전세 기준, 팀 확인 필요)
+    no_cap_ratio: float = 1.0
+    no_cap_codes: frozenset = field(default_factory=lambda: frozenset({JEONSE_RATIO_HIGH, SENIOR_BURDEN_HIGH}))
+
+    # 입력 주소와 등기부 주소가 다르면 위험 신호가 있어도 판단보류 (다른 집 등기부일 수 있음) [초안]
+    address_mismatch_holds_grade: bool = True
 
 
 DEFAULT_CONFIG = RiskConfig()

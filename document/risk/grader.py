@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from .address_match import compare as compare_address
 from .config import (
     DEFAULT_CONFIG,
     GRADE_DANGER,
@@ -23,6 +24,7 @@ from .config import (
     LEVEL_CHECK,
     LEVEL_DANGER,
     LEVEL_RANK,
+    REGISTRY_ADDRESS_MISMATCH,
     SENIOR_BURDEN_HIGH,
     RiskConfig,
     jeonse_source,
@@ -38,6 +40,7 @@ PRICE_CARD_KEYS = (
     "base_date", "trade_period", "confidence", "jeonse_ratio", "senior_burden_ratio",
 )
 CAP_NOTE = " (시세 신뢰도 낮음: 주의까지만 반영)"
+NO_CAP_NOTE = " (시세 신뢰도 낮음이지만 {pct} 이상이라 위험 유지, 깡통전세 기준(팀 확인 필요))"
 
 
 def _flag(code, level, value, threshold, source) -> dict:
@@ -100,26 +103,39 @@ def merge_flags(*groups: list[dict]) -> list[dict]:
 
 
 def cap_low_confidence(flags: list[dict], confidence: str | None, cfg: RiskConfig = DEFAULT_CONFIG) -> list[dict]:
-    """시세 신뢰도가 낮으면 시세 영역 신호의 위험을 주의로 낮춘다."""
+    """시세 신뢰도가 낮으면 시세 영역 신호의 위험을 주의로 낮춘다.
+
+    단, 비율 신호 값이 cfg.no_cap_ratio(1.0) 이상이면 낮추지 않는다 (보증금·선순위가 시세 이상, 깡통전세).
+    """
     if confidence != cfg.low_confidence:
         return flags
     out = []
     for f in flags:
         if f["code"] in cfg.price_area_codes and f["level"] == LEVEL_DANGER:
-            f = dict(f, level=LEVEL_CAUTION, source=(f.get("source") or "") + CAP_NOTE)
+            v = f.get("value")
+            if f["code"] in cfg.no_cap_codes and v is not None and v >= cfg.no_cap_ratio:
+                note = NO_CAP_NOTE.format(pct=f"{round(cfg.no_cap_ratio * 100):g}%")
+                f = dict(f, source=(f.get("source") or "") + note)
+            else:
+                f = dict(f, level=LEVEL_CAUTION, source=(f.get("source") or "") + CAP_NOTE)
         out.append(f)
     return out
 
 
 # ---------- 등급 ----------
 
-def decide_grade(flags: list[dict], items: list[dict], cfg: RiskConfig = DEFAULT_CONFIG) -> str:
+def decide_grade(flags: list[dict], items: list[dict], cfg: RiskConfig = DEFAULT_CONFIG,
+                 price_card: dict | None = None) -> str:
     """등급 규칙 (docs/analysis-result.md 초안 + 팀 합의 대기 항목은 config).
 
+    0. 입력 주소와 등기부 주소가 다르면(REGISTRY_ADDRESS_MISMATCH) 판단보류. 다른 집 등기부일 수 있어 위험보다 먼저 본다.
     1. 위험 신호가 하나라도 있으면 위험 (데이터 일부가 빠져도 이미 위험이 확인됨).
     2. 판단보류 대상 부분(cfg.hold_parts)이 ok가 아니면 판단보류.
-    3. 그 밖에는 가장 높은 level. 확인필요는 반영하지 않고, 신호가 없으면 안전.
+    3. 선순위 부담률을 계산하지 못했으면 판단보류 (price_card를 넘긴 경우).
+    4. 그 밖에는 가장 높은 level. 확인필요는 반영하지 않고, 신호가 없으면 안전.
     """
+    if cfg.address_mismatch_holds_grade and any(f["code"] == REGISTRY_ADDRESS_MISMATCH for f in flags):
+        return GRADE_HOLD
     levels = [f["level"] for f in flags if f["level"] != LEVEL_CHECK]
     if LEVEL_DANGER in levels:
         return GRADE_DANGER
@@ -127,6 +143,8 @@ def decide_grade(flags: list[dict], items: list[dict], cfg: RiskConfig = DEFAULT
     if cfg.special_terms_failure_holds_grade:
         hold.add("special_terms")
     if any(i["part"] in hold and i["status"] != "ok" for i in items):
+        return GRADE_HOLD
+    if cfg.hold_when_senior_ratio_missing and price_card is not None and price_card.get("senior_burden_ratio") is None:
         return GRADE_HOLD
     if not levels:
         return GRADE_SAFE
@@ -191,6 +209,16 @@ def _property(price: dict | None, registry: dict | None, address: dict | None) -
     }
 
 
+def address_flags(address: dict | None, registry: dict | None) -> list[dict]:
+    """입력 주소와 등기부 표제부 주소가 다르면 확인필요 신호. 비교할 수 없으면 신호 없음."""
+    cmp = compare_address(address, registry)
+    if cmp is None or cmp["match"]:
+        return []
+    what = "·".join(cmp["diff"])
+    return [_flag(REGISTRY_ADDRESS_MISMATCH, LEVEL_CHECK, None, None,
+                  f"주소 모듈 결과와 등기사항전부증명서 표제부의 {what}가 다름 (다른 집 등기부일 수 있어 등급 판단보류)")]
+
+
 def build_analysis_result(
     *,
     price: dict | None = None,
@@ -213,6 +241,7 @@ def build_analysis_result(
         ratio_flags(card, config),
         (price or {}).get("flags"),
         (registry or {}).get("flags"),
+        address_flags(address, registry),
     )
     flags = cap_low_confidence(flags, card.get("confidence"), config)
     flags = sorted(flags, key=lambda f: -_rank(f["level"]))
@@ -220,7 +249,7 @@ def build_analysis_result(
     return {
         "analysis_id": analysis_id,
         "analyzed_at": analyzed_at or datetime.now(KST).isoformat(timespec="seconds"),
-        "grade": decide_grade(flags, items, config),
+        "grade": decide_grade(flags, items, config, card),
         "data_status": {
             "overall": "complete" if all(i["status"] == "ok" for i in items) else "incomplete",
             "items": items,

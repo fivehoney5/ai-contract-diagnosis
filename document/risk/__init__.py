@@ -2,6 +2,7 @@
 
 from .config import DEFAULT_CONFIG, RiskConfig
 from .grader import (
+    address_flags,
     band_level,
     build_analysis_result,
     cap_low_confidence,
@@ -17,6 +18,7 @@ __all__ = [
     "band_level",
     "build_analysis_result",
     "cap_low_confidence",
+    "address_flags",
     "decide_grade",
     "merge_flags",
     "ratio_flags",
