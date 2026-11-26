@@ -62,12 +62,28 @@ def registry_flags(summary: dict, title: dict, *, is_collective: bool, issued: d
     if is_collective and (not title["has_land_right"] or title["separate_land_registration"]):
         flags.append(_flag("LAND_RIGHT_CHECK_NEEDED", LEVEL_CHECK, None, None,
                            f"{SRC} 표제부 (집합건물인데 대지권 표시 없음 또는 \"별도등기 있음\" 문구), HUG 등기부 확인 안내"))
+    if not is_collective:
+        flags.append(_flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", LEVEL_CHECK, None, None,
+                           f"{SRC} 표제부 (집합건물이 아님: 다가구 등은 다른 세입자 보증금이 등기부에 나오지 않아 "
+                           "선순위 합계가 실제보다 적을 수 있음. 확정일자 부여현황·전입세대로 선순위 보증금 확인), "
+                           "체크리스트 1쪽 (안내서 p.25-26)"))
     if issued is not None and today is not None:
         age = (today - issued).days
         if age >= max_age_days:
             flags.append(_flag("REGISTRY_OUTDATED", LEVEL_CAUTION, age, max_age_days,
                                f"{SRC} 열람일시 (분석일 기준 경과 일수), 체크리스트 2쪽 잔금 전 재확인"))
     return flags
+
+
+def senior_amount_for_price(summary: dict) -> int | None:
+    """시세 모듈에 넘길 선순위 금액. 금액을 못 읽은 선순위 등기가 하나라도 있으면 None.
+
+    읽은 금액만 더하면 선순위 부담률이 실제보다 낮게 나와 위험을 놓치므로 판단보류가 되게 한다.
+    읽은 금액까지의 합계는 registry_card.senior_amount_total에 남긴다.
+    """
+    if summary["senior_amount_missing_ranks"]:
+        return None
+    return summary["senior_amount_total"]
 
 
 def _failed(reason: str) -> dict:
@@ -107,7 +123,8 @@ def analyze_registry(source, *, today: date | None = None, max_age_days: int = R
         return _failed("갑구·을구 항목을 찾지 못했습니다")
 
     issued = parse_date(doc.issued_text)
-    is_collective = "[집합건물]" in doc.header_text.replace(" ", "")
+    # 쪽 머리 [집합건물] 줄이 없어도 전유부분 표제부가 있으면 집합건물로 본다
+    is_collective = "[집합건물]" in doc.header_text.replace(" ", "") or title["has_unit_section"]
     today = today or date.today()
     return {
         "data_status_item": {"part": "registry", "status": "ok", "reason_code": None, "reason": None},
@@ -118,9 +135,10 @@ def analyze_registry(source, *, today: date | None = None, max_age_days: int = R
             "exclusive_area_m2": title["exclusive_area_m2"],
             "structure": title["structure"],
         },
-        "senior_amount_used": summary["senior_amount_total"],
+        "senior_amount_used": senior_amount_for_price(summary),
         "registry_card": {
             "senior_amount_total": summary["senior_amount_total"],
+            "senior_amount_complete": not summary["senior_amount_missing_ranks"],
             "senior_breakdown": summary["senior_breakdown"],
             "counts": summary["counts"],
             "earliest_security_date": summary["earliest_security_date"],

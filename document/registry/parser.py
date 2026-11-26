@@ -29,6 +29,9 @@ KIND_RULES = (
     ("가처분", "provisional_disposition"),
     ("압류", "seizure"),
     ("가등기", "provisional_registration"),
+    # 전세권을 담보로 잡은 근저당권. 전세금이 이미 선순위에 들어가므로 합계에서 뺀다
+    ("전세권근저당권", "jeonse_mortgage"),
+    ("전세권부근저당권", "jeonse_mortgage"),
     ("근저당권설정", "mortgage"),
     ("근저당권변경", "mortgage_change"),
     ("근저당권이전", "mortgage_transfer"),
@@ -52,6 +55,7 @@ KIND_LABEL = {
     "seizure": "압류",
     "provisional_registration": "가등기",
     "mortgage": "근저당권",
+    "jeonse_mortgage": "전세권근저당권",
     "mortgage_change": "근저당권변경",
     "mortgage_transfer": "근저당권이전",
     "pledge": "질권",
@@ -73,6 +77,7 @@ OWNER_KINDS = ("ownership_preservation", "ownership_transfer")
 AMOUNT_LABELS = {
     "mortgage": ("채권최고액",),
     "mortgage_change": ("채권최고액",),
+    "jeonse_mortgage": ("채권최고액",),
     "hypothec": ("채권액",),
     "jeonse_right": ("전세금",),
     "jeonse_right_change": ("전세금",),
@@ -329,6 +334,7 @@ def parse_title(rows: list[Row], header_text: str = "") -> dict:
         "has_land_right": land_right is not None,
         "separate_land_registration": separate_land,
         "has_title_section": has_title,
+        "has_unit_section": unit is not None,
     }
 
 

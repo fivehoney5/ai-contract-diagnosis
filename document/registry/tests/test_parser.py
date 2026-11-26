@@ -11,7 +11,7 @@ from datetime import date
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, ROOT)
 
-from document.registry.analysis_result import registry_flags  # noqa: E402
+from document.registry.analysis_result import registry_flags, senior_amount_for_price  # noqa: E402
 from document.registry.parser import (  # noqa: E402
     build_entries,
     cancel_refs,
@@ -156,6 +156,24 @@ class EntriesTest(unittest.TestCase):
         self.assertEqual(s["earliest_security_date"], "2017-01-01")
         self.assertEqual(s["counts"]["lease_right"], 1)
         self.assertEqual(s["counts"]["jeonse_right"], 1)
+        # 금액을 못 읽은 근저당이 있으면 시세 모듈에는 None을 넘긴다
+        self.assertIsNone(senior_amount_for_price(s))
+
+    def test_senior_for_price_when_complete(self):
+        s = summarize(build_entries([R("eul", "1", "근저당권설정", "채권최고액 금100,000,000원")]))
+        self.assertEqual(senior_amount_for_price(s), 100_000_000)
+
+    def test_jeonse_mortgage_not_double_counted(self):
+        es = build_entries([
+            R("eul", "1", "전세권설정", "전세금 금150,000,000원\n전세권자 박가상"),
+            R("eul", "1-1", "1번전세권근저당권설정", "채권최고액 금180,000,000원\n근저당권자 가상은행"),
+            R("eul", "2", "근저당권설정", "채권최고액 금50,000,000원"),
+        ])
+        self.assertEqual(by_rank(es, "eul", "1-1").kind, "jeonse_mortgage")
+        self.assertEqual(by_rank(es, "eul", "1-1").amount, 180_000_000)
+        s = summarize(es)
+        self.assertEqual(s["senior_amount_total"], 200_000_000)
+        self.assertEqual(s["counts"]["mortgage"], 1)
 
     def test_gap_counts_and_trust_ended(self):
         es = build_entries([
@@ -269,9 +287,12 @@ class FlagsTest(unittest.TestCase):
         self.assertEqual(fl["LAND_RIGHT_CHECK_NEEDED"]["level"], "확인필요")
         self.assertEqual(fl["REGISTRY_OUTDATED"]["value"], 25)
         self.assertEqual(fl["REGISTRY_OUTDATED"]["threshold"], 7)
-        # 일반 건물(집합건물 아님)은 대지권 신호 없음
-        self.assertNotIn("LAND_RIGHT_CHECK_NEEDED", self.codes(registry_flags(
-            self.summary(), self.title(land=False), is_collective=False, issued=None, today=None)))
+        # 일반 건물(집합건물 아님)은 대지권 신호 대신 선순위 보증금 확인 안내
+        general = self.codes(registry_flags(self.summary(), self.title(land=False), is_collective=False,
+                                            issued=None, today=None))
+        self.assertNotIn("LAND_RIGHT_CHECK_NEEDED", general)
+        self.assertEqual(general["HIDDEN_SENIOR_CLAIM_CHECK_NEEDED"]["level"], "확인필요")
+        self.assertIn("확정일자", general["HIDDEN_SENIOR_CLAIM_CHECK_NEEDED"]["source"])
 
     def test_trust_level_option(self):
         fl = self.codes(registry_flags(self.summary(trust=1), self.title(), is_collective=True,
