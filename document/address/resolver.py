@@ -97,6 +97,50 @@ def juso_to_address(j: dict) -> dict:
     }
 
 
+# 같은 지번에 건물이 여러 개일 때 건물마다 값이 다를 수 있는 칸
+BUILDING_FIELDS = ("road_address", "zip_code", "building_name", "building_mgmt_no", "is_apartment_complex")
+
+
+def _compact(text: str | None) -> str:
+    return "".join((text or "").split())
+
+
+def _pick_building(group: list[dict], input_text: str, unit_dong: str | None, notes: list[str]) -> dict:
+    """같은 지번의 건물 중 하나를 고른다.
+
+    건물이 하나면 그대로 쓴다. 여러 개면 건물명(bdNm)이 입력 주소에 들어 있거나
+    입력한 동("B동")으로 끝나는 건물이 딱 하나일 때만 그 건물을 고르고,
+    못 고르면 건물 단위 칸(BUILDING_FIELDS)을 null로 두고 building_candidates에 후보를 남긴다.
+    """
+    if len(group) == 1:
+        return dict(group[0], building_candidates=[])
+
+    # 법정동 이름("역삼동")이 건물명 일부("역삼")와 겹쳐 잘못 고르지 않게 뺀다
+    text = _compact(input_text).replace(_compact(group[0]["legal_dong_name"]), " ")
+    dong = _compact(unit_dong)
+    matched = []
+    for a in group:
+        name = _compact(a["building_name"])
+        if name and (name in text or (dong and name.endswith(dong))):
+            matched.append(a)
+
+    candidates = [{k: a[k] for k in ("building_name", "road_address", "building_mgmt_no")} for a in group]
+    names = ", ".join(sorted({a["building_name"] or a["road_address"] for a in group}))
+    if len(matched) == 1:
+        notes.append(f"같은 지번에 건물이 {len(group)}개 있어 입력과 맞는 '{matched[0]['building_name']}'을 고름 ({names})")
+        return dict(matched[0], building_candidates=candidates)
+
+    address = dict(group[0], building_candidates=candidates)
+    for k in BUILDING_FIELDS:
+        address[k] = None
+    # 지번주소 끝에 붙은 건물명도 뗀다
+    first_name = group[0]["building_name"]
+    if first_name and address["jibun_address"].endswith(" " + first_name):
+        address["jibun_address"] = address["jibun_address"][: -len(first_name) - 1]
+    notes.append(f"같은 지번에 건물이 {len(group)}개 있어 건물을 정하지 못함, 건물 정보는 비워 둠 ({names})")
+    return address
+
+
 def _lot_id(addr: dict) -> tuple:
     return addr["bjdong_cd"], addr["plat_gb"], addr["bun"], addr["ji"]
 
@@ -191,14 +235,12 @@ def resolve_address(
         )
 
     group = next(iter(lots.values()))
-    address = dict(group[0])
-    if len(group) > 1:
-        names = sorted({a["building_name"] or a["road_address"] for a in group})
-        notes.append(f"같은 지번에 건물이 {len(group)}개 있음: {', '.join(names)}")
+    # 시세 모듈(건축물대장) 형식에 맞춤: 동은 "101동"/"A동", 호는 "1203"
+    unit_dong = dong_nm or (f"{parsed_dong}동" if parsed_dong else None)
+    address = _pick_building(group, original, unit_dong, notes)
     if address["is_mountain"]:
         notes.append("산 지번이라 주소 키를 만들지 않음 (팀 형식 확인 필요)")
-    # 시세 모듈(건축물대장) 형식에 맞춤: 동은 "101동"/"A동", 호는 "1203"
-    address["dong_nm"] = dong_nm or (f"{parsed_dong}동" if parsed_dong else None)
+    address["dong_nm"] = unit_dong
     address["ho_nm"] = ho_nm or parsed_ho
     return _result("ok", address=address, notes=notes, input_text=original)
 

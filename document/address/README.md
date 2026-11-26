@@ -12,11 +12,17 @@
 | `juso_client.py` | 도로명주소 검색 API 호출 (연결 실패·서버 오류면 한 번 재시도) |
 | `resolver.py` | 주소 문자열 → 주소 키·법정동코드·지번·동·호 (`resolve_address`), 시세 모듈 인자로 바꾸기 (`to_price_args`) |
 | `cache.py` | 검색 결과 캐시. `get`/`save` 인터페이스와 SQLite 구현 |
+| `requirements.txt` | 필요한 패키지 (`requests`, `python-dotenv`) |
 | `tests/` | 인터넷 없이 도는 테스트와 실제 API 확인 스크립트(`live_check.py`) |
 
 ## 준비
 
-1. 패키지는 시세 모듈과 같습니다 (`requests`, `python-dotenv`).
+1. 저장소 루트에서 패키지를 설치합니다.
+
+```powershell
+python -m pip install -r document/address/requirements.txt
+```
+
 2. 저장소 루트 `.env`에 도로명주소 검색 API 승인키를 넣습니다. 키는 채팅이나 코드에 붙여넣지 않습니다.
 
 ```
@@ -81,6 +87,7 @@ else:
 | `road_address`, `jibun_address` | | 도로명주소, 지번주소 전체 |
 | `zip_code`, `building_name`, `building_mgmt_no` | | 우편번호, 건물명, 건물관리번호 |
 | `is_apartment_complex` | `false` | 공동주택 여부 (API `bdKdcd`) |
+| `building_candidates` | `[]` | 같은 지번에 건물이 여러 개일 때 후보 (`building_name`, `road_address`, `building_mgmt_no`). 하나면 빈 목록 |
 | `dong_nm`, `ho_nm` | `B동`, `401` | 주소 끝에서 읽은 동·호 (인자로 넣으면 그 값). 시세 모듈 형식과 같음 |
 
 ## 실패 코드
@@ -95,6 +102,7 @@ else:
 
 - **동·호 읽기**: 주소 끝의 `101동 1203호`, `B동 401호`, `제1동 제201호`, `401호`를 떼어서 `dong_nm`, `ho_nm`에 넣고 검색어에서는 뺍니다. 동은 숫자·영문이나 한 글자(`가동`)만 인정합니다. `화곡동 401호`의 화곡동은 법정동 이름이라 동으로 보지 않습니다.
 - **검색어 정리**: 괄호 내용, `3층`, 쉼표, API가 거부하는 특수문자를 지웁니다. 결과가 0건이면 `...로 12-3` 또는 `...동 산 12-3`까지만 잘라서 한 번 더 찾습니다(뒤에 붙은 건물명 때문에 못 찾는 경우).
-- **후보 여러 개**: 결과가 모두 같은 지번(같은 주소 키)이면 성공으로 보고 `notes`에 남깁니다. 지번이 다르면 `ADDRESS_NOT_FOUND`와 후보 최대 5개를 돌려줍니다.
+- **후보 여러 개**: 결과가 모두 같은 지번(같은 주소 키)이면 성공으로 봅니다. 지번이 다르면 `ADDRESS_NOT_FOUND`와 후보 최대 5개를 돌려줍니다.
+- **같은 지번에 건물 여러 개**: 건물명이 입력 주소에 들어 있거나 입력한 동(`B동`)으로 끝나는 건물이 딱 하나면 그 건물을 고릅니다. 못 고르면 건물마다 다른 칸(`road_address`, `zip_code`, `building_name`, `building_mgmt_no`, `is_apartment_complex`)을 `null`로 두고, 지번주소 끝의 건물명도 뗍니다. 후보는 `building_candidates`에 남깁니다. 주소 키·법정동코드·지번은 같으므로 그대로 채웁니다.
 - **산 지번**: 법정동코드·본번·부번·`plat_gb`는 채우고 `address_key`만 `null`입니다. 지금 주소 키 형식에 산을 표시할 칸이 없기 때문입니다 (팀 확인 필요). 건물이 없는 산 지번은 도로명주소 API에 없어서 `ADDRESS_NOT_FOUND`가 됩니다.
 - **캐시**: 정상 응답(0건 포함)만 저장하고 API 오류는 저장하지 않습니다. 기본 위치는 `data/local/address_cache.sqlite`(깃에 안 올라감), 30일 지나면 다시 조회합니다. 다른 저장소를 쓰려면 `get(keyword)`, `save(keyword, total, juso)`만 맞춘 객체를 `cache=`로 넘깁니다.

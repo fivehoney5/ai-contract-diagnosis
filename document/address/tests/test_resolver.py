@@ -103,6 +103,39 @@ class ResolveOkTests(unittest.TestCase):
         self.assertEqual(r["status"], "ok")
         self.assertTrue(any("건물이 2개" in n for n in r["notes"]))
 
+    def test_same_lot_buildings_left_empty_when_unknown(self):
+        items = [juso(bd="해피빌라", mgt="B1", bdkd="1", road="A로 1", jibun_addr="서울특별시 강남구 역삼동 123 해피빌라"),
+                 juso(bd="스마일빌라", mgt="B2", road="A로 3")]
+        r, _ = run("역삼동 123 401호", FakeResp(body(items)))
+        a = r["address"]
+        self.assertEqual(a["address_key"], "1168010100-0123-0000")
+        for k in ("building_name", "building_mgmt_no", "is_apartment_complex", "road_address", "zip_code"):
+            self.assertIsNone(a[k], k)
+        self.assertEqual(a["jibun_address"], "서울특별시 강남구 역삼동 123")
+        self.assertEqual(len(a["building_candidates"]), 2)
+        self.assertTrue(any("정하지 못함" in n for n in r["notes"]))
+
+    def test_same_lot_building_picked_by_name(self):
+        items = [juso(bd="해피빌라", mgt="B1"), juso(bd="스마일빌라", mgt="B2")]
+        r, _ = run("역삼동 123 스마일빌라 401호", FakeResp(body(items)))
+        self.assertEqual(r["address"]["building_mgmt_no"], "B2")
+        self.assertEqual(r["address"]["building_name"], "스마일빌라")
+
+    def test_same_lot_building_picked_by_dong(self):
+        items = [juso(bd="해피빌라 A동", mgt="B1"), juso(bd="해피빌라 B동", mgt="B2")]
+        r, _ = run("역삼동 123 B동 401호", FakeResp(body(items)))
+        self.assertEqual(r["address"]["building_mgmt_no"], "B2")
+
+    def test_same_lot_name_overlapping_legal_dong_not_picked(self):
+        items = [juso(bd="역삼", mgt="B1"), juso(bd="스마일빌라", mgt="B2")]
+        r, _ = run("역삼동 123", FakeResp(body(items)))
+        self.assertIsNone(r["address"]["building_mgmt_no"])
+
+    def test_single_building_has_empty_candidates(self):
+        r, _ = run("테헤란로 152", FakeResp(body([juso()])))
+        self.assertEqual(r["address"]["building_candidates"], [])
+        self.assertEqual(r["address"]["building_name"], "테스트빌딩")
+
     def test_mountain_jibun(self):
         r, _ = run("강서구 개화동 산 12-3", FakeResp(body([juso(adm="1150011000", mt="1", bun="12", ji="3", emd="개화동")])))
         self.assertEqual(r["status"], "ok")
