@@ -237,3 +237,8 @@ __marimo__/
 
 # Local frontend dependencies
 node_modules/
+
+# PDF files (e.g. property registers) may contain personal data: block all PDFs
+*.[pP][dD][fF]
+# Exception: public source documents in the knowledge base
+!data/knowledge_base/**/*.[pP][dD][fF]
