@@ -100,9 +100,9 @@ def parse_amount(value: str | None) -> int:
 
 def load_service_key() -> str:
     load_dotenv()
-    key = os.getenv("DATA_GO_KR_KEY", "").strip()
+    key = os.getenv("PUBLIC_DATA_API_KEY", "").strip()
     if not key:
-        raise RuntimeError(".env에 DATA_GO_KR_KEY가 없습니다 (공공데이터포털 Decoding 키를 넣으세요)")
+        raise RuntimeError(".env에 PUBLIC_DATA_API_KEY가 없습니다 (공공데이터포털 Decoding 키를 넣으세요)")
     return key
 
 
