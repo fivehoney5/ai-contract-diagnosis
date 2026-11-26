@@ -221,3 +221,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local environment overrides and credentials
+.env.*
+!.env.example
+.envrc.*
+*.pem
+*.key
+
+# Local uploads and private data
+/uploads/
+/data/raw/
+/data/private/
+/data/local/
+
+# Local frontend dependencies
+node_modules/
