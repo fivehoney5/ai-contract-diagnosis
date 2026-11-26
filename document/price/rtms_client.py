@@ -38,6 +38,7 @@ TYPE_ALIASES = {
 }
 
 SUCCESS_CODES = {"00", "000"}
+MANWON = 10_000  # API 거래금액은 만원 단위라서 원으로 바꿀 때 곱하는 값
 PAGE_SIZE = 1000
 RETRIES = 1  # 실패하면 한 번 더 시도
 RETRY_WAIT = 1.0  # 다시 시도하기 전 기다리는 시간(초)
@@ -54,7 +55,7 @@ class Trade:
     dong: str  # 법정동 이름 (umdNm)
     jibun: str
     area: float  # 전용면적(㎡)
-    price: int  # 거래금액(만원)
+    price: int  # 거래금액(원)
     deal_date: date
     floor: str
     house_type: str = ""  # 연립다세대만: "연립" / "다세대" (houseType)
@@ -65,6 +66,7 @@ class Trade:
 
     @property
     def price_per_m2(self) -> float:
+        """㎡당 가격(원)."""
         return self.price / self.area
 
     def to_dict(self) -> dict:
@@ -87,13 +89,13 @@ def type_label(property_type: str) -> str:
 
 
 def parse_amount(value: str | None) -> int:
-    """'63,400' 같은 만원 단위 문자열을 정수(만원)로 바꾼다."""
+    """API의 '63,400' 같은 만원 단위 문자열을 원 단위 정수로 바꾼다 (63,400만원 -> 634,000,000원)."""
     if value is None:
         raise ValueError("거래금액이 비어 있습니다")
     cleaned = value.replace(",", "").strip()
     if not cleaned:
         raise ValueError("거래금액이 비어 있습니다")
-    return int(cleaned)
+    return int(cleaned) * MANWON
 
 
 def load_service_key() -> str:

@@ -36,6 +36,10 @@ from document.price.rtms_client import (  # noqa: E402
 )
 
 
+# 테스트의 가격 숫자는 읽기 쉽게 만원으로 적고, 거래를 만들 때 원으로 바꿔 넣는다.
+MAN = 10_000
+
+
 def item(name_tag, name, dong, jibun, area, amount, ymd=(2026, 10, 5), cdeal="", house_type=None):
     y, m, d = ymd
     ht = f"<houseType>{house_type}</houseType>" if house_type is not None else ""
@@ -58,14 +62,14 @@ def response(items, total=None, code="000"):
 
 
 def T(name, dong, area, price, jibun="1", d=date(2026, 10, 1), ptype="apt", year=2000):
-    return Trade(ptype, name, dong, jibun, area, price, d, "3", build_year=year)
+    return Trade(ptype, name, dong, jibun, area, price * MAN, d, "3", build_year=year)
 
 
 class ParseTests(unittest.TestCase):
     def test_parse_amount(self):
-        self.assertEqual(parse_amount("63,400"), 63400)
-        self.assertEqual(parse_amount("  125,000 "), 125000)
-        self.assertEqual(parse_amount("9500"), 9500)
+        self.assertEqual(parse_amount("63,400"), 634_000_000)  # 6억 3,400만원
+        self.assertEqual(parse_amount("  125,000 "), 1_250_000_000)
+        self.assertEqual(parse_amount("9500"), 95_000_000)
         with self.assertRaises(ValueError):
             parse_amount("")
 
@@ -78,7 +82,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(total, 2)
         self.assertEqual(len(trades), 1)
         t = trades[0]
-        self.assertEqual((t.building_name, t.dong, t.price, t.area), ("은마", "대치동", 245000, 76.79))
+        self.assertEqual((t.building_name, t.dong, t.price, t.area), ("은마", "대치동", 245000 * MAN, 76.79))
         self.assertEqual(t.deal_date, date(2026, 10, 5))
 
     def test_parse_officetel_and_rowhouse_name_fields(self):
@@ -179,26 +183,26 @@ class EstimateTests(unittest.TestCase):
         e = self.est("래미안 대치 팰리스", 84.95)
         self.assertEqual(e.status, "estimated")
         self.assertEqual(e.basis, "same_building_similar_area")
-        self.assertEqual(e.price, 305000)
+        self.assertEqual(e.price, 305000 * MAN)
         self.assertEqual(e.sample_count, 2)
 
     def test_tier2_same_building_any_area(self):
         e = self.est("래미안대치팰리스", 59.0)
         self.assertEqual(e.basis, "same_building_any_area")
-        unit = sorted([300000 / 84.9, 310000 / 84.97, 400000 / 114.0])[1]
+        unit = sorted([300000 * MAN / 84.9, 310000 * MAN / 84.97, 400000 * MAN / 114.0])[1]
         self.assertEqual(e.price, round(unit * 59.0))
 
     def test_tier1_by_jibun(self):
         e = self.est("316", 76.79)
         self.assertEqual(e.basis, "same_building_similar_area")
-        self.assertEqual(e.price, 245000)
+        self.assertEqual(e.price, 245000 * MAN)
 
     def test_tier3_same_dong_similar_area(self):
         # 은마는 2건뿐이고 84.0㎡ ±5%에는 84.43 1건 -> 1단계 성립. 90㎡로 1·2단계를 피한다
         e = self.est("은마", 90.0)
         self.assertEqual(e.basis, "same_dong_similar_area")
         # 대치동 90㎡ ±10%(81~99): 300000(84.9), 310000(84.97), 260000(84.43)
-        self.assertEqual(e.price, 300000)
+        self.assertEqual(e.price, 300000 * MAN)
         self.assertEqual(e.build_year, 2000)
 
     def test_tier4_same_dong_any_area(self):
@@ -233,7 +237,7 @@ class EstimateTests(unittest.TestCase):
 
 
 def B(name, area, price, d=date(2026, 10, 2), gbn="직거래", buyer="법인", seller="법인", dong="논현동", jibun="236-8", year=2015):
-    return Trade("officetel", name, dong, jibun, area, price, d, "5",
+    return Trade("officetel", name, dong, jibun, area, price * MAN, d, "5",
                  dealing_gbn=gbn, buyer_gbn=buyer, seller_gbn=seller, build_year=year)
 
 
@@ -247,7 +251,7 @@ class BulkTradeTests(unittest.TestCase):
         other = [B("다른오피스텔", 30.0, 9000, jibun="1")] * 3  # 같은 동, 다른 건물의 일괄거래
         e = estimate_from_trades(bulk + normal + other, "논현동", "폴스타인 논현", 30.0)
         self.assertEqual(e.basis, "same_building_similar_area")
-        self.assertEqual(e.price, 31000)
+        self.assertEqual(e.price, 31000 * MAN)
         self.assertEqual(e.sample_count, 2)
         self.assertEqual(e.bulk_excluded_count, 3)  # 같은 건물·비슷한 면적 범위 안에서 뺀 건수 (38.33㎡ 제외)
         self.assertEqual(e.bulk_excluded_total, 7)
@@ -314,12 +318,12 @@ class BuildingMatchTests(unittest.TestCase):
         # "쉐르빌"은 "강남역 쉐르빌"에도 부분 일치하지만, 정확히 같은 "쉐르빌"만 쓴다
         e = estimate_from_trades(self.TRADES, "역삼동", "쉐르빌", 30.0)
         self.assertEqual(e.building_match, MATCH_EXACT)
-        self.assertEqual(e.price, 99000)
+        self.assertEqual(e.price, 99000 * MAN)
 
     def test_single_partial_match_accepted(self):
         e = estimate_from_trades(self.TRADES, "역삼동", "와이즈", 30.0)
         self.assertEqual(e.building_match, MATCH_PARTIAL)
-        self.assertEqual(e.price, 50000)
+        self.assertEqual(e.price, 50000 * MAN)
         self.assertEqual(e.confidence, "low")  # 1건뿐
 
     def test_confidence_high_with_two_same_building(self):
@@ -336,7 +340,7 @@ class WeakTierTests(unittest.TestCase):
         ]
         e = estimate_from_trades(trades, "논현동", "폴스타인 논현", 25.0)
         self.assertEqual(e.basis, "same_dong_similar_area")
-        self.assertEqual(e.price, 23100)
+        self.assertEqual(e.price, 23100 * MAN)
         self.assertTrue(any("1건뿐" in n for n in e.notes))
 
     def test_dong_tier_needs_three(self):
@@ -353,7 +357,7 @@ class WeakTierTests(unittest.TestCase):
         # 같은 건물 거래가 제외돼서 0건, 2015년 구축 -> 같은 동 비슷한 연식으로 추정
         self.assertEqual(e.status, "estimated")
         self.assertEqual(e.basis, "same_dong_similar_area")
-        self.assertEqual(e.price, 23000)
+        self.assertEqual(e.price, 23000 * MAN)
         self.assertEqual(e.bulk_excluded_total, 1)
         self.assertTrue(any("일괄거래로 판단돼 제외" in n for n in e.notes))
 
@@ -380,7 +384,7 @@ class NewBuildTests(unittest.TestCase):
         e = estimate_from_trades(self.DONG, "화곡동", "구축빌라", 45.0, period=self.P, build_year=2010)
         self.assertEqual(e.status, "estimated")
         self.assertEqual(e.basis, "same_dong_similar_area")
-        self.assertEqual(e.price, 20100)
+        self.assertEqual(e.price, 20100 * MAN)
         self.assertEqual(e.confidence, "low")
 
     def test_zero_trades_old_building_no_similar_year(self):
@@ -404,7 +408,7 @@ class NewBuildTests(unittest.TestCase):
         self.assertEqual(e.basis, "same_dong_similar_area")
         self.assertEqual(e.build_year, 2025)
         self.assertEqual(e.sample_count, 3)
-        self.assertEqual(e.price, 36000)
+        self.assertEqual(e.price, 36000 * MAN)
 
     def test_build_year_argument_overrides(self):
         trades = [T("X", "화곡동", 60.0, 40000, year=None)] + [
@@ -425,7 +429,7 @@ class NewBuildTests(unittest.TestCase):
         self.assertEqual(e.reason_code, BUILDING_NOT_IDENTIFIED)
         self.assertIn("위하우스 (지번 163-7, 2026년)", e.building_candidates)
         e = estimate_from_trades(trades, "화곡동", "163-7", 26.2)
-        self.assertEqual(e.price, 21000)
+        self.assertEqual(e.price, 21000 * MAN)
 
     def test_bulk_excluded_new_building_not_confused_with_old_namesake(self):
         # 신축 위하우스(163-7) 거래는 모두 일괄거래로 빠지고, 같은 이름의 2015년 건물만 남는 경우
@@ -457,7 +461,7 @@ class NewBuildingWarningTests(unittest.TestCase):
         self.assertEqual(e.confidence, "medium")
         self.assertEqual(e.to_dict()["confidence_label"], "중간")
         self.assertEqual(e.warnings, [])
-        self.assertEqual(e.dong_reference_price, 30100)
+        self.assertEqual(e.dong_reference_price, 30100 * MAN)
 
     def test_inflation_warning_over_30_percent(self):
         trades = [T("신축", "화곡동", 45.0, 40000, year=2025)] + self.dong_trades()  # 30100 대비 +33%
@@ -500,8 +504,8 @@ class NewBuildingWarningTests(unittest.TestCase):
         e = estimate_from_trades(trades, "화곡동", "신축", 40.0, period=self.PERIOD)
         # ㎡당 1000 vs 750 -> +33% (총액으로는 40000 vs 33000 = +21%라 경고가 안 났을 것)
         self.assertEqual(e.warnings, ["PRICE_INFLATION_SUSPECTED"])
-        self.assertEqual(e.price_per_m2, 1000.0)
-        self.assertEqual(e.dong_reference_price_per_m2, 750.0)
+        self.assertEqual(e.price_per_m2, 10_000_000)  # 1000만원/㎡
+        self.assertEqual(e.dong_reference_price_per_m2, 7_500_000)
 
     def test_comparison_uses_three_year_range(self):
         trades = [T("신축", "화곡동", 45.0, 40000, year=2025)] + self.dong_trades(year=2021)  # 4년 차이
@@ -529,7 +533,7 @@ class PublicBuyerTests(unittest.TestCase):
         trades = [B("A", 30.0, 30000, buyer="공공기관")] + [B("A", 30.0, 10000) for _ in range(3)]
         e = estimate_from_trades(trades, "논현동", "A", 30.0)
         self.assertEqual(e.sample_count, 1)
-        self.assertEqual(e.price, 30000)
+        self.assertEqual(e.price, 30000 * MAN)
         self.assertEqual(e.bulk_excluded_total, 3)
 
 
@@ -587,16 +591,15 @@ class JeonseTests(unittest.TestCase):
 
     def test_assess_estimated(self):
         trades = [T("은마", "대치동", 76.79, 250000)]
-        r = assess_jeonse("apt", "11680", "대치동", "은마", 76.79, 200000,
+        r = assess_jeonse("apt", "11680", "대치동", "은마", 76.79, 200000 * MAN,
                           trades=trades, today=date(2026, 11, 25))
         self.assertEqual(r["status"], "estimated")
-        self.assertEqual(r["estimated_price"], 250000)
+        self.assertEqual(r["estimated_price"], 250000 * MAN)
         self.assertEqual(r["jeonse_ratio"], 0.8)
-        self.assertEqual(r["jeonse_ratio_pct"], 80.0)
         self.assertEqual(r["estimate"]["period"], {"start": "2025-12-01", "end": "2026-11-25"})
 
     def test_assess_no_price_returns_reason(self):
-        r = assess_jeonse("apt", "11680", "대치동", "은마", 76.79, 200000,
+        r = assess_jeonse("apt", "11680", "대치동", "은마", 76.79, 200000 * MAN,
                           trades=[], today=date(2026, 11, 25))
         self.assertEqual(r["status"], "no_price")
         self.assertIsNone(r["estimated_price"])
@@ -614,7 +617,7 @@ class JeonseTests(unittest.TestCase):
 
         e = estimate_price("오피스텔", "11680", "역삼동", "A오피스텔", 30.0, fetcher=fake_fetcher)
         self.assertEqual(seen, {"ptype": "officetel", "lawd_cd": "11680", "months": 12})
-        self.assertEqual(e.price, 30000)
+        self.assertEqual(e.price, 30000 * MAN)
 
 
 if __name__ == "__main__":

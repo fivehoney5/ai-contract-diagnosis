@@ -24,7 +24,7 @@ def main() -> int:
     p.add_argument("--dong", default="대치동", help="법정동 이름")
     p.add_argument("--building", default="은마", help="건물명 또는 지번")
     p.add_argument("--area", type=float, default=76.79, help="전용면적(㎡)")
-    p.add_argument("--deposit", type=int, default=150000, help="보증금(만원)")
+    p.add_argument("--deposit", type=int, default=1_500_000_000, help="보증금(원, 예: 1500000000 = 15억)")
     p.add_argument("--bjdong", help="10자리 법정동코드 (넣으면 건축물대장도 조회, 예: 1150010300 = 강서구 화곡동)")
     p.add_argument("--jibun", help="건축물대장 조회용 지번 (예: 355-14)")
     p.add_argument("--dong-nm", help="건축물대장 동 이름 (예: A동)")

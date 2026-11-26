@@ -106,7 +106,7 @@ _JIBUN_RE = re.compile(r"^(산\s*)?\d+(-\d+)?$")
 @dataclass
 class PriceEstimate:
     status: str  # "estimated" | "no_price"
-    price: int | None  # 추정 시세(만원)
+    price: int | None  # 추정 시세(원)
     basis: str | None  # 추정 기준 코드 (BASIS_LABELS 키)
     basis_label: str | None
     reason_code: str | None  # status="no_price"일 때만
@@ -127,8 +127,8 @@ class PriceEstimate:
     warning_messages: list[str] = field(default_factory=list)
     dong_reference_price: int | None = None  # 비교용: 같은 동·비슷한 면적·비슷한 연식 중앙값 (같은 건물 제외)
     dong_reference_count: int = 0
-    price_per_m2: float | None = None  # 부풀림 비교에 쓴 이 건물 ㎡당 가격(만원)
-    dong_reference_price_per_m2: float | None = None  # 비교 대상 ㎡당 중앙값(만원)
+    price_per_m2: int | None = None  # 부풀림 비교에 쓴 이 건물 ㎡당 가격(원)
+    dong_reference_price_per_m2: int | None = None  # 비교 대상 ㎡당 중앙값(원)
     building_info: BuildingInfo | None = None  # 건축물대장 조회 결과 (bjdong_cd를 넣었을 때)
     build_year_source: str | None = None  # "input" | "building_register" | "trades"
 
@@ -506,9 +506,9 @@ def estimate_from_trades(
                     if diff > inflation_threshold:
                         warnings.append(INFLATION_WARNING)
                         warning_messages.append(
-                            f"매매가 부풀림 의심: 신축 건물 거래 {len(pool)}건의 ㎡당 가격 {own_unit:,.0f}만원이 "
+                            f"매매가 부풀림 의심: 신축 건물 거래 {len(pool)}건의 ㎡당 가격 {own_unit:,.0f}원이 "
                             f"같은 동 비슷한 면적·연식({target_year}±{inflation_year_tol}년) 거래 {ref_count}건의 "
-                            f"㎡당 중앙값 {ref_unit:,.0f}만원보다 {diff * 100:.0f}% 높습니다."
+                            f"㎡당 중앙값 {ref_unit:,.0f}원보다 {diff * 100:.0f}% 높습니다."
                         )
                 else:
                     notes.append(
@@ -538,8 +538,8 @@ def estimate_from_trades(
             warning_messages=warning_messages,
             dong_reference_price=ref_price,
             dong_reference_count=ref_count,
-            price_per_m2=None if own_unit is None else round(own_unit, 1),
-            dong_reference_price_per_m2=None if ref_unit is None else round(ref_unit, 1),
+            price_per_m2=None if own_unit is None else int(round(own_unit)),
+            dong_reference_price_per_m2=None if ref_unit is None else int(round(ref_unit)),
         )
 
     return no_price(
@@ -655,7 +655,7 @@ def assess_jeonse(
     deposit: int,
     **kwargs,
 ) -> dict:
-    """시세를 추정하고 보증금(만원)으로 전세가율을 계산한다."""
+    """시세를 추정하고 보증금(원)으로 전세가율을 계산한다. 전세가율은 0-1 소수."""
     if deposit <= 0:
         raise ValueError(f"보증금은 0보다 커야 합니다: {deposit}")
     est = estimate_price(property_type, lawd_cd, dong, building, area, **kwargs)
@@ -665,7 +665,6 @@ def assess_jeonse(
         "deposit": deposit,
         "estimated_price": est.price,
         "jeonse_ratio": None if ratio is None else round(ratio, 4),
-        "jeonse_ratio_pct": None if ratio is None else round(ratio * 100, 1),
         "basis": est.basis,
         "basis_label": est.basis_label,
         "confidence": est.confidence,

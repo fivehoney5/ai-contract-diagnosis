@@ -134,7 +134,7 @@ class FetchTests(unittest.TestCase):
 
 
 def T(name, area, price, jibun, year, dong="화곡동"):
-    return Trade("rowhouse", name, dong, jibun, area, price, date(2026, 10, 1), "3", build_year=year)
+    return Trade("rowhouse", name, dong, jibun, area, price * 10_000, date(2026, 10, 1), "3", build_year=year)  # 가격은 만원으로 적음
 
 
 NEIGHBORS = [T(f"이웃{i}", 45.0, 20000 + i * 100, str(i + 10), 2012) for i in range(3)]
@@ -167,7 +167,7 @@ class EstimateWithRegisterTests(unittest.TestCase):
         self.assertEqual(e.status, "estimated")
         self.assertEqual(e.build_year, 2012)
         self.assertEqual(e.build_year_source, "building_register")
-        self.assertEqual(e.price, 20100)
+        self.assertEqual(e.price, 20100 * 10_000)
         self.assertEqual(reg.calls[0][:2], ("1150010300", "123-4"))
 
     def test_register_new_building_is_no_price(self):
