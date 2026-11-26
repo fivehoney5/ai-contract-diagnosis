@@ -1,0 +1,65 @@
+{
+  "analysis_id": "sample-002",
+  "analyzed_at": "2026-11-26T14:05:00+09:00",
+  "grade": "판단보류",
+  "data_status": {
+    "overall": "incomplete",
+    "items": [
+      {
+        "part": "price",
+        "status": "failed",
+        "reason_code": "NO_TRADES",
+        "reason": "신축 등으로 시세 확인 불가: 같은 건물 매매 거래가 최근 12개월 동안 없습니다."
+      },
+      { "part": "registry", "status": "ok", "reason_code": null, "reason": null },
+      {
+        "part": "special_terms",
+        "status": "failed",
+        "reason_code": "PARSE_FAILED",
+        "reason": "계약서 사진에서 특약 구역을 읽지 못했습니다. 특약 누락 여부는 판단 보류합니다."
+      }
+    ]
+  },
+  "property": {
+    "address_key": "1150010300-0456-0007",
+    "address_display": "서울특별시 강서구 가상동 456-7 (가상 주소)",
+    "housing_type": "연립다세대",
+    "exclusive_area_m2": 24.5,
+    "build_year": 2025
+  },
+  "price_card": {
+    "deposit": 250000000,
+    "senior_amount_used": 0,
+    "estimated_price": null,
+    "sample_count": 0,
+    "method": null,
+    "method_label": null,
+    "base_date": "2026-11-25",
+    "trade_period": { "from": "2025-11-01", "to": "2026-10-31" },
+    "confidence": null,
+    "jeonse_ratio": null,
+    "senior_burden_ratio": null
+  },
+  "flags": [
+    {
+      "code": "NO_BUILDING_TRADES",
+      "level": "주의",
+      "value": 0,
+      "threshold": 1,
+      "source": "국토교통부 연립다세대 매매 실거래가 (같은 건물 거래 건수, 준공 3년 이내)"
+    },
+    {
+      "code": "VIOLATION_BUILDING_CHECK_NEEDED",
+      "level": "확인필요",
+      "value": null,
+      "threshold": null,
+      "source": "공공데이터 건축물대장 API에 위반건축물 항목 없음, 건축물대장 열람본 확인 필요"
+    }
+  ],
+  "special_terms": {
+    "extraction_status": "failed",
+    "masked": true,
+    "page": null,
+    "section_text": null
+  }
+}
