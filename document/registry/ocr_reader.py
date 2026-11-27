@@ -75,7 +75,8 @@ def fix_text(text: str) -> str:
     return text
 
 
-OCR_SECTION_RE = re.compile(r"^[\[【(1lI|]?(표제부|갑구|을구)[\]】)1lI|]?")
+# 【가 잘리거나 점·1·[ 로 읽혀도 되게 앞에 한글이 아닌 글자 2개까지 허용 (실제 폰 사진에서 ".갑 구 1(")
+OCR_SECTION_RE = re.compile(r"^[^가-힣]{0,2}(표제부|갑구|을구)")
 
 
 def match_title(text: str):
@@ -280,6 +281,10 @@ def read_registry_images(images, engine=None) -> tuple[RegistryDocument, float |
                     subsection, cols = sub, None
                 continue
             hm = _header_map([b.text for b in line])
+            if hm and section is None:
+                # 구 제목을 못 읽은 채 표가 나오면 그 표의 권리를 통째로 놓친다 (어느 구인지 모름)
+                raise RegistryReadError("스캔본·사진에서 표 위의 구 제목(표제부·갑구·을구)을 읽지 못했습니다. "
+                                        "제목까지 화면에 들어오게 찍거나 PDF 원본을 올려 주세요.")
             if hm:
                 flush()
                 cols = sorted((line[i].x0, key) for i, key in hm.items())

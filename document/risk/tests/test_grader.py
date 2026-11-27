@@ -345,6 +345,10 @@ class AddressMatchTest(unittest.TestCase):
         self.assertEqual(parse_lot("서울특별시 강서구 화곡동 355-14 제4층 제401호"), ("화곡동", False, 355, 14))
         self.assertEqual(parse_lot("경기도 남양주시 오남읍 양지리 산 12"), ("양지리", True, 12, 0))
         self.assertEqual(parse_lot("서울특별시 종로구 종로1가 24"), ("종로1가", False, 24, 0))
+        # 사진 등기부 OCR은 띄어쓰기를 잃는다 (PR #16 리뷰)
+        self.assertEqual(parse_lot("서울특별시 노원구상계동720상계주공6단지아파트제601동"), ("상계동", False, 720, 0))
+        self.assertEqual(parse_lot("서울특별시강서구화곡동355-14"), ("화곡동", False, 355, 14))
+        self.assertEqual(parse_lot("서울특별시 구로구 구로동 12-1"), ("구로동", False, 12, 1))
         self.assertIsNone(parse_lot("서울특별시 강서구 화곡로 123"))
         self.assertIsNone(parse_lot(None))
 

@@ -44,7 +44,7 @@ def _flag(code, level, value, threshold, source) -> dict:
 
 
 def registry_flags(summary: dict, title: dict, *, is_collective: bool, issued: date | None, today: date | None,
-                   max_age_days: int = REGISTRY_MAX_AGE_DAYS, trust_level: str = TRUST_LEVEL) -> list[dict]:
+                   max_age_days: int = REGISTRY_MAX_AGE_DAYS, trust_level: str = TRUST_LEVEL, entries=()) -> list[dict]:
     c = summary["counts"]
     flags = []
     if c["restriction"]:
@@ -73,6 +73,11 @@ def registry_flags(summary: dict, title: dict, *, is_collective: bool, issued: d
                            f"다른 세대의 선순위 보증금 확인 필요. {SRC} 표제부 (집합건물이 아님: 다가구 등은 다른 세입자 보증금이 등기부에 나오지 않아 "
                            "선순위 합계가 실제보다 적을 수 있음. 확정일자 부여현황·전입세대로 선순위 보증금 확인), "
                            "체크리스트 1쪽 (안내서 p.25-26)"))
+    unconfirmed = [e for e in entries if e.status == "active" and "strike_unconfirmed" in e.cancel_basis]
+    if unconfirmed:
+        flags.append(_flag("STRIKE_WITHOUT_CANCEL_ENTRY", LEVEL_CHECK, len(unconfirmed), 1,
+                           "스캔본·사진 등기부 (취소선처럼 보이지만 말소 등기가 없어 살아 있는 것으로 계산한 등기 건수. "
+                           "선이 잘못 잡혔을 수 있으니 원본 등기부에서 말소 여부 확인)"))
     if issued is not None and today is not None:
         age = (today - issued).days
         if age >= max_age_days:
@@ -170,7 +175,7 @@ def analyze_registry(source, *, today: date | None = None, max_age_days: int = R
                        "더 밝고 반듯하게 찍거나 인터넷등기소 PDF 원본을 올려 주세요.")
 
     try:
-        entries = build_entries(doc.rows)
+        entries = build_entries(doc.rows, trust_strike=ocr_score is None)
         title = parse_title(doc.rows, doc.header_text)
         summary = summarize(entries)
     except Exception as e:
@@ -208,6 +213,6 @@ def analyze_registry(source, *, today: date | None = None, max_age_days: int = R
             "ocr_score": ocr_score,
         },
         "flags": registry_flags(summary, title, is_collective=is_collective, issued=issued, today=today,
-                                max_age_days=max_age_days, trust_level=trust_level),
+                                max_age_days=max_age_days, trust_level=trust_level, entries=entries),
         "detail": {"entries": [e.to_dict() for e in entries]},
     }

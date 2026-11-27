@@ -138,18 +138,42 @@ class FakeOcrTest(unittest.TestCase):
         r = self.run_pages([[box("아무 글자", 100, 100)]])
         self.assertIn("스캔", r["data_status_item"]["reason"])
 
-    def test_strike_line_cancels(self):
+    def test_first_section_title_missed_fails(self):
+        # 실제 폰 사진: 맨 위 "【갑 구】"의 【가 잘려 ".갑 구 1("로 읽힘 -> 제목으로 인정
+        p = [("．갑 구 1(소유권에 관한 사항)" if "갑 구" in t else t, b, s) for t, b, s in basic_page()]
+        self.assertEqual(self.run_pages([p])["data_status_item"]["status"], "ok")
+        # 제목을 아예 못 읽으면 갑구 표를 통째로 놓치므로 판단보류
+        p = [it for it in basic_page() if "갑 구" not in it[0]]
+        r = self.run_pages([p])
+        self.assertEqual(r["data_status_item"]["reason_code"], "PARSE_FAILED")
+        self.assertIn("구 제목", r["data_status_item"]["reason"])
+
+    @staticmethod
+    def struck_image():
         img = blank(1)[0]
         d = ImageDraw.Draw(img)
-        # 근저당권설정 행 글자 가운데를 지나는 빨간 줄
+        # 을구 1번 근저당권설정 행 글자 가운데를 지나는 빨간 줄
         for x0, x1, y in ((220, 220 + 22 * 6, 552), (800, 800 + 22 * 14, 578), (420, 420 + 22 * 10, 544),
                           (800, 800 + 22 * 16, 544)):
             d.line([(x0, y), (x1, y)], fill=(220, 0, 0), width=2)
-        r = analyze_registry([img], engine=FakeEngine([basic_page()]), today=TODAY)
-        ents = {(e["section"], e["rank"]): e for e in r["detail"]["entries"]}
-        self.assertEqual(ents[("eul", "1")]["status"], "cancelled")
-        self.assertIn("strike", ents[("eul", "1")]["cancel_basis"])
+        return img
+
+    def test_strike_only_stays_active(self):
+        # OCR 취소선만으로는 말소로 보지 않는다 (선을 잘못 잡으면 살아 있는 근저당이 사라짐). 확인필요 신호
+        r = analyze_registry([self.struck_image()], engine=FakeEngine([basic_page()]), today=TODAY)
+        m = {(e["section"], e["rank"]): e for e in r["detail"]["entries"]}[("eul", "1")]
+        self.assertEqual((m["status"], m["cancel_basis"]), ("active", ["strike_unconfirmed"]))
+        self.assertEqual(r["senior_amount_used"], 120000000)
+        flag = [f for f in r["flags"] if f["code"] == "STRIKE_WITHOUT_CANCEL_ENTRY"]
+        self.assertEqual((flag[0]["level"], flag[0]["value"]), ("확인필요", 1))
+
+    def test_strike_with_cancel_entry(self):
+        p = basic_page() + [box("2", 110, 640), box("1번근저당권설정등기말소", 220, 640, x1=400), box("2023년9월12일", 420, 640)]
+        r = analyze_registry([self.struck_image()], engine=FakeEngine([p]), today=TODAY)
+        m = {(e["section"], e["rank"]): e for e in r["detail"]["entries"]}[("eul", "1")]
+        self.assertEqual((m["status"], m["cancel_basis"]), ("cancelled", ["strike", "note"]))
         self.assertEqual(r["senior_amount_used"], 0)
+        self.assertNotIn("STRIKE_WITHOUT_CANCEL_ENTRY", [f["code"] for f in r["flags"]])
 
     def test_text_is_not_strike(self):
         r = self.run_pages([basic_page()])

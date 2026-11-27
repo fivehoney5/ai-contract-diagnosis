@@ -3,7 +3,8 @@
 PDF 없이도 쓸 수 있게 Row 목록만 받는다 (테스트는 합성 Row로 한다).
 
 말소 판정 (둘 중 하나라도 해당하면 cancelled):
-    - strike : 행 글자의 절반 이상에 취소선
+    - strike : 행 글자의 절반 이상에 취소선 (글자 층 PDF만. OCR은 선을 잘못 잡을 수 있어 trust_strike=False로 부르며,
+               취소선만 있고 말소 등기가 없으면 살아 있는 것으로 두고 cancel_basis에 "strike_unconfirmed"를 남긴다)
     - note   : 같은 구의 다른 행 등기목적에 "N번…말소"가 있음
 선순위 금액 = 말소되지 않은 근저당권 채권최고액 + 저당권 채권액 + 전세권 전세금 + 주택임차권 임차보증금.
 근저당권변경(부기 N-M) 행에 채권최고액이 있으면 그 금액으로 바꾼다.
@@ -114,7 +115,7 @@ class Entry:
     amount: int | None
     holder: str | None  # 마스킹한 대표 권리자 이름
     status: str = "active"  # active / cancelled
-    cancel_basis: list[str] = field(default_factory=list)  # strike, note
+    cancel_basis: list[str] = field(default_factory=list)  # strike, note, parent (살아 있으면 strike_unconfirmed)
     cancelled_by: str | None = None  # 말소 등기의 순위번호
     page: int | None = None
 
@@ -222,8 +223,10 @@ def _merge_continuations(rows: list[Row]) -> list[Row]:
     return out
 
 
-def build_entries(rows: list[Row]) -> list[Entry]:
-    """갑구·을구 행을 Entry로 바꾸고 말소 여부를 정한다."""
+def build_entries(rows: list[Row], *, trust_strike: bool = True) -> list[Entry]:
+    """갑구·을구 행을 Entry로 바꾸고 말소 여부를 정한다.
+    trust_strike=False(OCR)이면 취소선만으로는 말소로 보지 않는다. 살아 있는 근저당을 말소로 잘못 보면
+    선순위 합계가 줄어 위험한 집이 안전하게 나오기 때문이다."""
     rows = _merge_continuations([r for r in rows if r.section in ("gap", "eul")])
     entries: list[Entry] = []
     for r in rows:
@@ -246,8 +249,11 @@ def build_entries(rows: list[Row]) -> list[Entry]:
             page=r.page,
         )
         if r.struck_ratio >= STRIKE_RATIO:
-            e.status = "cancelled"
-            e.cancel_basis.append("strike")
+            if trust_strike:
+                e.status = "cancelled"
+                e.cancel_basis.append("strike")
+            else:
+                e.cancel_basis.append("strike_unconfirmed")
         entries.append(e)
 
     # 말소 등기가 가리키는 순위번호를 말소 처리
@@ -258,6 +264,8 @@ def build_entries(rows: list[Row]) -> list[Entry]:
             if target is None or target is e:
                 continue
             target.status = "cancelled"
+            if "strike_unconfirmed" in target.cancel_basis:  # 말소 등기로 확인된 취소선
+                target.cancel_basis[target.cancel_basis.index("strike_unconfirmed")] = "strike"
             if "note" not in target.cancel_basis:
                 target.cancel_basis.append("note")
             target.cancelled_by = e.rank
