@@ -345,12 +345,28 @@ class AddressMatchTest(unittest.TestCase):
         self.assertEqual(parse_lot("서울특별시 강서구 화곡동 355-14 제4층 제401호"), ("화곡동", False, 355, 14))
         self.assertEqual(parse_lot("경기도 남양주시 오남읍 양지리 산 12"), ("양지리", True, 12, 0))
         self.assertEqual(parse_lot("서울특별시 종로구 종로1가 24"), ("종로1가", False, 24, 0))
-        # 사진 등기부 OCR은 띄어쓰기를 잃는다 (PR #16 리뷰)
-        self.assertEqual(parse_lot("서울특별시 노원구상계동720상계주공6단지아파트제601동"), ("상계동", False, 720, 0))
-        self.assertEqual(parse_lot("서울특별시강서구화곡동355-14"), ("화곡동", False, 355, 14))
-        self.assertEqual(parse_lot("서울특별시 구로구 구로동 12-1"), ("구로동", False, 12, 1))
+        self.assertEqual(parse_lot("부산광역시 중구 중앙동4가 10"), ("중앙동4가", False, 10, 0))
         self.assertIsNone(parse_lot("서울특별시 강서구 화곡로 123"))
         self.assertIsNone(parse_lot(None))
+
+    def test_lot_without_spaces(self):
+        # 사진 등기부 OCR은 띄어쓰기를 잃는다. 동 이름을 자르지 않고 포함 여부로 본다 (PR #16 리뷰)
+        cases = [
+            ("부산광역시 중구 중앙동4가 10", dict(legal_dong_name="중앙동4가", bun="10", ji="0")),
+            ("서울특별시구로구구로동123-4", dict(legal_dong_name="구로동", bun="123", ji="4")),
+            ("남양주시오남읍양지리5", dict(legal_dong_name="오남읍", ri_name="양지리", bun="5", ji="0")),
+            ("서울특별시 노원구상계동720상계주공6단지아파트제601동", dict(legal_dong_name="상계동", bun="720", ji="0")),
+        ]
+        for display, fields in cases:
+            a = address_ok(jibun=None, **fields)
+            self.assertEqual(compare(a, registry_at(display)), {"match": True, "diff": []}, display)
+        # 바로 뒤에 숫자가 붙으면 다른 지번
+        a = address_ok(jibun=None, legal_dong_name="중앙동4가", bun="10", ji="0")
+        self.assertEqual(compare(a, registry_at("부산광역시중구중앙동4가101"))["diff"], ["지번"])
+        self.assertEqual(compare(a, registry_at("부산광역시중구중앙동4가10-2"))["diff"], ["지번"])
+        a = address_ok(jibun=None, legal_dong_name="구로동", bun="123", ji="4")
+        self.assertEqual(compare(a, registry_at("서울특별시구로구구로동123-45"))["diff"], ["지번"])
+        self.assertEqual(compare(a, registry_at("서울특별시구로구신도림동123-4"))["diff"], ["지번"])
 
     def test_parse_ho(self):
         self.assertEqual(parse_ho("제4층 제401호"), 401)
