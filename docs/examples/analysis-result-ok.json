@@ -9,7 +9,8 @@
         "part": "price",
         "status": "ok",
         "reason_code": null,
-        "reason": null
+        "reason": null,
+        "data_source": "api"
       },
       {
         "part": "registry",

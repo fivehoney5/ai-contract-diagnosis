@@ -9,7 +9,8 @@
         "part": "price",
         "status": "failed",
         "reason_code": "NO_TRADES",
-        "reason": "신축 등으로 시세 확인 불가: 같은 건물 매매 거래가 최근 12개월 동안 없습니다."
+        "reason": "신축 등으로 시세 확인 불가: 같은 건물 매매 거래가 최근 12개월 동안 없습니다.",
+        "data_source": "cache"
       },
       {
         "part": "registry",

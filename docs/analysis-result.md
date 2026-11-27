@@ -29,6 +29,7 @@
 | `data_status.overall` | `complete` 또는 `incomplete` (하나라도 실패하면 incomplete) |
 | `data_status.items[]` | 부분별 상태. `part`는 `price`, `registry`, `special_terms`, `status`는 `ok`, `failed`, `not_provided` |
 | `data_status.items[].reason_code` | 실패 코드. `ADDRESS_NOT_FOUND`, `NO_TRADES`, `API_UNAVAILABLE`, `PARSE_FAILED` |
+| `data_status.items[].data_source` | `price` 항목만. 공공 API(실거래가·건축물대장) 응답을 어디서 받았는지. `api`(새로 조회, 일부만 캐시여도 api), `cache`(모두 만료 전 캐시), `stale_cache`(API가 실패해 만료된 저장본 사용), API를 부르지 않았으면 `null`. `stale_cache`이고 `status`가 `ok`이면 `reason`에 저장 시각 안내가 들어갑니다. 화면에서 "저장된 데이터 기준"으로 표시할 수 있습니다 |
 | `property.housing_type` | 주택 유형. `아파트`, `오피스텔`, `연립다세대` |
 | `price_card.deposit` | 보증금 |
 | `price_card.senior_amount_used` | 선순위 계산에 실제 사용한 금액 (근저당은 채권최고액) |

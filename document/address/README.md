@@ -105,4 +105,4 @@ else:
 - **후보 여러 개**: 결과가 모두 같은 지번(같은 주소 키)이면 성공으로 봅니다. 지번이 다르면 `ADDRESS_NOT_FOUND`와 후보 최대 5개를 돌려줍니다.
 - **같은 지번에 건물 여러 개**: 건물명이 입력 주소에 들어 있거나 입력한 동(`B동`)으로 끝나는 건물이 딱 하나면 그 건물을 고릅니다. 못 고르면 건물마다 다른 칸(`road_address`, `zip_code`, `building_name`, `building_mgmt_no`, `is_apartment_complex`)을 `null`로 두고, 지번주소 끝의 건물명도 뗍니다. 후보는 `building_candidates`에 남깁니다. 주소 키·법정동코드·지번은 같으므로 그대로 채웁니다.
 - **산 지번**: 법정동코드·본번·부번·`plat_gb`는 채우고 `address_key`만 `null`입니다. 지금 주소 키 형식에 산을 표시할 칸이 없기 때문입니다 (팀 확인 필요). 건물이 없는 산 지번은 도로명주소 API에 없어서 `ADDRESS_NOT_FOUND`가 됩니다.
-- **캐시**: 정상 응답(0건 포함)만 저장하고 API 오류는 저장하지 않습니다. 기본 위치는 `data/local/address_cache.sqlite`(깃에 안 올라감), 30일 지나면 다시 조회합니다. 다른 저장소를 쓰려면 `get(keyword)`, `save(keyword, total, juso)`만 맞춘 객체를 `cache=`로 넘깁니다.
+- **캐시**: `cache`를 안 넘기면 공통 [공공 API 캐시](../api_cache/README.md)(`data/local/public_api_cache.sqlite`, 30일)를 씁니다. API가 실패했는데 저장본이 있으면 그것으로 찾고 `notes`에 남깁니다. 정상 응답(0건 포함)만 저장하고 API 오류는 저장하지 않습니다. 따로 저장소를 쓰려면 `get(keyword)`, `save(keyword, total, juso)`만 맞춘 객체(예: `SQLiteAddressCache()`)를 `cache=`로 넘기고, 끄려면 `cache=None`을 넘깁니다.

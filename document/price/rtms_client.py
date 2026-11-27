@@ -18,6 +18,8 @@ from typing import Iterable
 import requests
 from dotenv import load_dotenv
 
+from ..api_cache import ApiCache, cached_call, default_cache
+
 BASE_URL = "https://apis.data.go.kr/1613000"
 
 # 유형 코드 -> (엔드포인트 경로, 건물명 필드, 표시 이름)
@@ -42,6 +44,14 @@ MANWON = 10_000  # API 거래금액은 만원 단위라서 원으로 바꿀 때 
 PAGE_SIZE = 1000
 RETRIES = 1  # 실패하면 한 번 더 시도
 RETRY_WAIT = 1.0  # 다시 시도하기 전 기다리는 시간(초)
+
+# 캐시 만료 (실거래 신고 기한이 계약 후 30일이라 지난 달 거래도 한동안 늘어난다)
+DAY = 86400
+TTL_THIS_MONTH = 1 * DAY
+TTL_LAST_MONTH = 3 * DAY
+TTL_OLDER = 90 * DAY  # 해제 거래가 반영되도록 무기한으로 두지 않는다
+CACHE_NAMESPACE = "rtms_trade"
+USE_DEFAULT_CACHE = object()  # cache를 따로 안 넘겼다는 표시
 
 
 class RTMSApiError(RuntimeError):
@@ -207,11 +217,58 @@ def fetch_trades(
     service_key: str | None = None,
     session: requests.Session | None = None,
     timeout: float = 10.0,
+    *,
+    cache=USE_DEFAULT_CACHE,
+    today: date | None = None,
 ) -> list[Trade]:
-    """한 달(deal_ymd='YYYYMM')치 거래를 모든 페이지에 걸쳐 가져온다."""
+    """한 달(deal_ymd='YYYYMM')치 거래를 모든 페이지에 걸쳐 가져온다.
+
+    같은 유형·시군구·연월은 캐시에서 꺼낸다 (만료는 trade_cache_ttl).
+    API가 실패하면 만료된 저장본이라도 있으면 그것을 돌려준다. cache=None이면 캐시를 쓰지 않는다.
+    """
     ptype = normalize_type(property_type)
     if not (len(lawd_cd) == 5 and lawd_cd.isdigit()):
         raise ValueError(f"법정동코드 앞 5자리가 아닙니다: {lawd_cd!r}")
+    return cached_call(
+        CACHE_NAMESPACE,
+        f"{ptype}:{lawd_cd}:{deal_ymd}",
+        lambda: _fetch_trades_api(ptype, lawd_cd, deal_ymd, service_key, session, timeout),
+        ttl_seconds=trade_cache_ttl(deal_ymd, today),
+        cache=resolve_cache(cache, session),
+        fallback_errors=(RuntimeError,),  # RTMSApiError(파싱 오류 포함)와 키 없음 오류
+        dump=trades_to_dicts,
+        load=lambda rows: [trade_from_dict(r) for r in rows],
+    )
+
+
+def trade_from_dict(d: dict) -> Trade:
+    d = dict(d)
+    d["deal_date"] = date.fromisoformat(d["deal_date"])
+    return Trade(**d)
+
+
+def trade_cache_ttl(deal_ymd: str, today: date | None = None) -> float:
+    """조회 월이 이번 달이면 1일, 지난 달이면 3일, 그 전이면 90일."""
+    today = today or date.today()
+    months_ago = (today.year * 12 + today.month) - (int(deal_ymd[:4]) * 12 + int(deal_ymd[4:6]))
+    if months_ago <= 0:
+        return TTL_THIS_MONTH
+    if months_ago == 1:
+        return TTL_LAST_MONTH
+    return TTL_OLDER
+
+
+def resolve_cache(cache, session) -> ApiCache | None:
+    """cache를 안 넘겼으면 실제 네트워크를 쓸 때(session 없음)만 기본 캐시를 쓴다.
+
+    테스트처럼 가짜 session을 넣은 호출은 기본 캐시 파일을 건드리지 않는다.
+    """
+    if cache is USE_DEFAULT_CACHE:
+        return default_cache() if session is None else None
+    return cache
+
+
+def _fetch_trades_api(ptype, lawd_cd, deal_ymd, service_key, session, timeout) -> list[Trade]:
     key = service_key or load_service_key()
     http = session or requests.Session()
     url = f"{BASE_URL}/{ENDPOINTS[ptype][0]}"
@@ -262,13 +319,15 @@ def fetch_recent_trades(
     today: date | None = None,
     service_key: str | None = None,
     session: requests.Session | None = None,
+    *,
+    cache=USE_DEFAULT_CACHE,
 ) -> list[Trade]:
-    """최근 N개월 거래를 월별로 호출해 합친다."""
-    key = service_key or load_service_key()
+    """최근 N개월 거래를 월별로 호출해 합친다. 캐시는 월별로 따로 쓴다 (fetch_trades 참고)."""
+    use = resolve_cache(cache, session)
     http = session or requests.Session()
     out: list[Trade] = []
     for ymd in recent_months(months, today):
-        out.extend(fetch_trades(property_type, lawd_cd, ymd, service_key=key, session=http))
+        out.extend(fetch_trades(property_type, lawd_cd, ymd, service_key=service_key, session=http, cache=use, today=today))
     return out
 
 

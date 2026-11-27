@@ -32,6 +32,7 @@ from .estimator import (
     estimate_price,
     is_jibun,
 )
+from ..api_cache import summarize_events, track_cache_usage
 from .rtms_client import RTMSApiError, RTMSParseError, normalize_type, type_label
 
 # 팀 공통 실패 코드 (docs/analysis-result.md의 data_status.items[].reason_code)
@@ -144,10 +145,14 @@ def build_price_result(
     jibun: str | None = None,
     failure: tuple[str, str] | None = None,
     inflation_threshold: float = INFLATION_THRESHOLD,
+    data_source: str | None = None,
+    cache_note: str | None = None,
 ) -> dict:
     """추정 결과(est)를 팀 형식 조각으로 바꾼다 (네트워크 호출 없음).
 
-    failure : API 호출 자체가 실패했을 때 (팀 실패 코드, 이유). 이때 est는 None.
+    failure     : API 호출 자체가 실패했을 때 (팀 실패 코드, 이유). 이때 est는 None.
+    data_source : 공공 API 응답을 어디서 받았는지 (api / cache / stale_cache). 모르면 None
+    cache_note  : stale_cache일 때 안내 문구. 성공이면 reason에 넣는다
     """
     price = est.price if est is not None and est.status == "estimated" else None
 
@@ -160,7 +165,8 @@ def build_price_result(
             "reason": est.reason if est else None,
         }
     else:
-        status_item = {"part": "price", "status": "ok", "reason_code": None, "reason": None}
+        status_item = {"part": "price", "status": "ok", "reason_code": None, "reason": cache_note}
+    status_item["data_source"] = data_source
 
     senior_ratio = None
     if senior_amount_used is not None:
@@ -238,15 +244,21 @@ def analyze_price(
         return build_price_result(
             None, failure=(ADDRESS_NOT_FOUND, f"시군구코드(법정동코드 앞 5자리)가 올바르지 않습니다: {lawd_cd!r}"), **common
         )
-    try:
-        est = estimate_price(
-            ptype, lawd_cd, dong, building, area, months=months, today=today,
-            bjdong_cd=bjdong_cd, jibun=jibun, **kwargs,
-        )
-    except RTMSParseError as e:
-        return build_price_result(None, failure=(PARSE_FAILED, f"실거래가 응답을 읽지 못했습니다: {e}"), **common)
-    except RTMSApiError as e:
-        return build_price_result(None, failure=(API_UNAVAILABLE, f"실거래가 조회 실패: {e}"), **common)
-    except RuntimeError as e:  # .env에 키가 없음
-        return build_price_result(None, failure=(API_UNAVAILABLE, str(e)), **common)
+    error: RuntimeError | None = None
+    with track_cache_usage() as events:  # 캐시를 썼는지 모아서 data_source에 쓴다
+        try:
+            est = estimate_price(
+                ptype, lawd_cd, dong, building, area, months=months, today=today,
+                bjdong_cd=bjdong_cd, jibun=jibun, **kwargs,
+            )
+        except RuntimeError as e:  # RTMSApiError, .env에 키가 없음
+            est, error = None, e
+    common["data_source"], common["cache_note"] = summarize_events(events)
+
+    if isinstance(error, RTMSParseError):
+        return build_price_result(None, failure=(PARSE_FAILED, f"실거래가 응답을 읽지 못했습니다: {error}"), **common)
+    if isinstance(error, RTMSApiError):
+        return build_price_result(None, failure=(API_UNAVAILABLE, f"실거래가 조회 실패: {error}"), **common)
+    if error is not None:
+        return build_price_result(None, failure=(API_UNAVAILABLE, str(error)), **common)
     return build_price_result(est, **common)
