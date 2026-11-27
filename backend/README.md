@@ -9,7 +9,7 @@ backend/
 ├── app/
 │   ├── main.py          # FastAPI 앱 생성, CORS, 라우터 등록
 │   ├── core/config.py   # 환경변수 설정 (저장소 루트 .env)
-│   ├── collectors/      # 지식베이스 수집 (laws.py: 법령 조문)
+│   ├── collectors/      # 지식베이스 수집 (laws.py: 법령 조문, qna.py: 백문백답)
 │   ├── clients/         # 외부 API 클라이언트
 │   │   ├── law.py           # 국가법령정보 공동활용
 │   │   └── public_data.py   # 공공데이터포털 (API 등록 목록 포함)
@@ -65,12 +65,13 @@ uvicorn app.main:app --reload
 
 코드에서는 `await client.call("qna", pageNo=1)`처럼 호출합니다.
 
-## 법령 수집
+## 지식베이스 수집
 
-법령 조문을 모아 `data/knowledge_base/laws/`에 저장합니다. 형식과 대상 목록은 [지식베이스 README](../data/knowledge_base/README.md)를 참고하세요.
+법령 조문과 백문백답을 모아 `data/knowledge_base/`에 저장합니다. 형식과 대상은 [지식베이스 README](../data/knowledge_base/README.md)를 참고하세요.
 
 ```bash
-python -m app.collectors.laws
+python -m app.collectors.laws   # 법령 조문 (LAW_API_OC 필요)
+python -m app.collectors.qna    # 백문백답 (PUBLIC_DATA_API_KEY 필요)
 ```
 
 ## 테스트
