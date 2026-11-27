@@ -43,6 +43,35 @@ class MaskTextTest(unittest.TestCase):
         self.assertIsNone(mask_text(None, [], {}))
 
 
+class ResidualRiskTest(unittest.TestCase):
+    """리뷰 반영: masked와 별개로 주소·이름이 남으면 외부 전송을 막는다."""
+
+    def test_address_left(self):
+        from document.contract.masking import residual_risks
+        for t in ("임차인은 서울특별시 노원구로 전입한다", "동일로 1414로 우편을 보낸다", "101동 707호", "상계동 123-4번지"):
+            self.assertEqual(residual_risks(t), ["ADDRESS"], t)
+
+    def test_name_only_in_terms(self):
+        from document.contract.masking import residual_risks
+        self.assertEqual(residual_risks("임차인 홍길동은 반려동물을 기르지 않는다."), ["POSSIBLE_NAME"])
+
+    def test_no_false_alarm(self):
+        from document.contract.masking import residual_risks
+        for t in ("보증금으로 1,000만원을 낸다.", "임대인은임차인에게 통지한다.", "임대인 또는 임차인은 해지할 수 있다.",
+                  "임차인 본인이 거주한다.", "최대 6개월까지 유예한다.", "제3조의6 제3항", "임차인 ***은 통지한다."):
+            self.assertEqual(residual_risks(t), [], t)
+
+    def test_result_flag(self):
+        base = {"base_terms": [], "custom_terms": [], "masked": False}
+        ok = mask_special_terms(dict(base, section_text="1. 반려동물을 기르지 않는다."), [])
+        self.assertTrue(ok["masked"])
+        self.assertTrue(ok["external_send_allowed"])
+        bad = mask_special_terms(dict(base, section_text="1. 임차인 홍길동은 마들로 999에 산다."), [])
+        self.assertTrue(bad["masked"])  # 마스킹은 했지만
+        self.assertFalse(bad["external_send_allowed"])  # 외부로는 보내지 않는다
+        self.assertEqual(bad["masking"]["residual_risks"], ["ADDRESS", "POSSIBLE_NAME"])
+
+
 class PartyNamesTest(unittest.TestCase):
     def test_from_party_table(self):
         lines = [
@@ -70,6 +99,7 @@ class MaskResultTest(unittest.TestCase):
             self.assertNotIn("2222", out[key])
         self.assertEqual(out["custom_terms"][0]["text"], "1. 임차인 ***(***-****-****)에게 알린다.")
         self.assertEqual(out["masking"]["counts"], {"phone": 1, "name": 1})
+        self.assertTrue(out["external_send_allowed"])
         self.assertFalse(res["masked"])  # 원본은 바꾸지 않는다
 
 

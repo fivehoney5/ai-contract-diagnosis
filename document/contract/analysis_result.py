@@ -20,6 +20,7 @@ def _failed(reason: str, *, source: str | None = None, page_count: int | None = 
         "pages": [],
         "masked": False,
         "masking": None,
+        "external_send_allowed": False,
         "form": None,
         "base_terms": [],
         "section_status": {"base_terms": "failed", "custom_terms": "failed"},
@@ -69,6 +70,7 @@ def analyze_contract(sources, *, engine=None, mask: bool = True) -> dict:
         **res,
         "masked": False,
         "masking": None,
+        "external_send_allowed": False,  # 마스킹하지 않으면 외부로 보내지 않는다
         "source": doc.source,
         "page_count": doc.page_count,
     }

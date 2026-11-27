@@ -49,7 +49,8 @@ result = build_analysis_result(..., special_terms=terms)
 | `custom_marker_found` | `※ 기타` 표시를 찾았는지 |
 | `custom_terms[]` | 직접 쓴 특약. `no`, `text`. 번호(1. 2. …)로 나누고, 번호가 없으면 문장 끝(…다.)에서 나눔 |
 | `custom_terms_text` | 직접 쓴 특약만 이은 텍스트. 없으면 `null` |
-| `masked`, `masking.counts` | 가렸는지, 종류별로 가린 개수 |
+| `masked`, `masking.counts` | 마스킹 처리를 했는지, 종류별로 가린 개수 |
+| `external_send_allowed`, `masking.residual_risks` | 외부 LLM에 보내도 되는지, 마스킹 뒤에도 남은 위험(`ADDRESS`, `POSSIBLE_NAME`). 아래 "외부 전송" 참고 |
 | `source` | `text_layer` / `ocr` / `mixed` |
 | `ocr_score` | 특약 칸 OCR 신뢰도 평균(0-1). 글자 층 PDF면 `null` |
 | `warnings[]` | 아래 표 |
@@ -104,6 +105,19 @@ OCR 실패가 "특약 없음"으로 보이지 않도록 직접 쓴 특약은 확
 - 금액, 날짜, 조항 번호는 그대로 둡니다.
 - 당사자란에 없는 이름(특약에만 나오는 사람)은 가리지 못합니다.
 - 주소는 가리지 않습니다(특약의 주소는 대부분 임차 주택 주소). 팀 합의가 필요합니다.
+
+### 외부 전송 (`external_send_allowed`)
+
+`masked: true`는 마스킹 처리를 했다는 표시일 뿐, 개인정보가 남지 않았다는 보장이 아닙니다. 그래서 외부 LLM 전송 여부를 따로 둡니다. AI 모듈은 `external_send_allowed`가 `true`일 때만 특약 텍스트를 외부로 보냅니다.
+
+| 남은 위험 | 잡는 모양 |
+| --- | --- |
+| `ADDRESS` | 도로명주소(`동일로 1414`), 동·호수(`101동 707호`), 지번(`상계동 123-4번지`), 시·도+시·군·구(`서울특별시 노원구`) |
+| `POSSIBLE_NAME` | 역할 뒤에 띄어 쓴 2-4글자 + 조사 (`임차인 홍길동은`). 당사자란에 없어서 못 가린 이름 |
+
+- 하나라도 남으면 `external_send_allowed: false`입니다. 잘못 잡아도 전송만 막히고 결과는 그대로라 보수적으로 잡습니다.
+- 마스킹을 끄면(`mask=False`) 항상 `false`입니다.
+- OCR이 띄어쓰기 없이 읽은 이름(`임차인홍길동은`)은 잡지 못합니다 [한계].
 
 ## 샘플 확인 (2026-11-27)
 

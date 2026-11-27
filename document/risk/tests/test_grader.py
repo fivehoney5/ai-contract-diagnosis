@@ -449,7 +449,53 @@ class TeamDecisionTest(unittest.TestCase):
         st = dict(terms_ok(), section_status={"base_terms": "read", "custom_terms": "failed"})
         r = full(special_terms=st)
         self.assertIn("SPECIAL_TERMS_CHECK_NEEDED", [f["code"] for f in r["flags"]])
-        self.assertEqual(r["data_status"]["items"][2]["status"], "ok")
+        # 리뷰 반영: 일부 구역만 못 읽어도 데이터 상태는 실패, 전체는 incomplete. 등급은 그대로
+        item = r["data_status"]["items"][2]
+        self.assertEqual((item["status"], item["reason_code"]), ("failed", "PARSE_FAILED"))
+        self.assertIn("직접 쓴 특약", item["reason"])
+        self.assertEqual(r["data_status"]["overall"], "incomplete")
+        self.assertEqual(r["grade"], "안전")
+        self.assertEqual(r["special_terms"]["section_text"], "1. 특약 문장")  # 읽은 부분은 그대로 넘김
+
+    def test_base_section_failed_adds_check_flag(self):
+        st = dict(terms_ok(), section_status={"base_terms": "failed", "custom_terms": "read"})
+        r = full(special_terms=st)
+        flag_ = next(f for f in r["flags"] if f["code"] == "SPECIAL_TERMS_CHECK_NEEDED")
+        self.assertIn("기본특약", flag_["source"])
+        self.assertEqual(r["data_status"]["items"][2]["status"], "failed")
+        self.assertEqual(r["data_status"]["overall"], "incomplete")
+        self.assertEqual(r["grade"], "안전")
+
+    def test_external_send_flag_passes_through(self):
+        self.assertFalse(full()["special_terms"]["external_send_allowed"])  # 판단 안 된 입력은 보내지 않음
+        r = full(special_terms=dict(terms_ok(), external_send_allowed=True))
+        self.assertTrue(r["special_terms"]["external_send_allowed"])
+        r = full(special_terms={"extraction_status": "failed", "external_send_allowed": True})
+        self.assertFalse(r["special_terms"]["external_send_allowed"])
+
+    def test_ratio_decided_before_rounding(self):
+        # 리뷰 반영: (선순위 + 보증금) / 시세 = 0.80001 은 표시값 0.8 이지만 80% 초과라 위험
+        price = price_part(price=1_000_000_000, deposit=500_000_000, senior=300_010_000)
+        price["price_card"]["senior_burden_ratio"] = 0.8
+        r = full(price=price)
+        f = next(f for f in r["flags"] if f["code"] == "SENIOR_BURDEN_HIGH")
+        self.assertEqual((f["level"], f["value"]), ("위험", 0.8))
+        self.assertEqual(r["grade"], "위험")
+
+    def test_multi_household_ratio_decided_before_rounding(self):
+        reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
+        price = price_part(price=1_000_000_000, deposit=500_000_000, senior=0)
+        r = full(price=price, registry=reg, other_tenant_deposits=300_010_000)
+        self.assertEqual(r["price_card"]["senior_burden_ratio"], 0.8)
+        self.assertEqual(r["grade"], "위험")
+
+    def test_low_confidence_cap_uses_exact_ratio(self):
+        # 0.99995는 표시값 1.0 이지만 100% 미만이라 신뢰도 낮음이면 주의로 낮춘다
+        price = price_part(price=1_000_000_000, deposit=999_950_000, confidence="낮음")
+        price["price_card"]["jeonse_ratio"] = 1.0
+        r = full(price=price)
+        f = next(f for f in r["flags"] if f["code"] == "JEONSE_RATIO_HIGH")
+        self.assertEqual(f["level"], "주의")
 
     def test_custom_section_empty_is_not_flagged(self):
         st = dict(terms_ok(), section_status={"base_terms": "read", "custom_terms": "empty"})

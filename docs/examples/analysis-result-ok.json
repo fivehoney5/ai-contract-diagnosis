@@ -81,6 +81,7 @@
   "special_terms": {
     "extraction_status": "ok",
     "masked": true,
+    "external_send_allowed": true,
     "page": 2,
     "section_text": "1. 임대인은 잔금 지급일 다음 날까지 등기부상 근저당권을 말소한다.\n2. 임대인은 계약 후 잔금일까지 새로운 담보를 설정하지 않는다.\n3. 임차인 ***의 보증보험 가입이 거절되면 계약을 해제하고 계약금을 반환한다.",
     "section_status": {

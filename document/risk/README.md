@@ -58,7 +58,9 @@ result["grade"]   # 안전 / 주의 / 위험 / 판단보류
 - level 높은 순(위험 → 주의 → 안전 → 확인필요)으로 정렬합니다.
 - 시세 신뢰도가 `낮음`이면 시세 영역 신호(`JEONSE_RATIO_HIGH`, `SENIOR_BURDEN_HIGH`, `NO_BUILDING_TRADES`, `PRICE_INFLATION_SUSPECTED`)는 위험을 주의로 낮추고 `source` 끝에 "(시세 신뢰도 낮음: 주의까지만 반영)"을 붙입니다. 등기부 신호는 낮추지 않습니다. 가격 카드에는 `confidence_label: "추정 시세 기준 · 신뢰도 낮음"`을 붙입니다.
 - 단, 전세가율·선순위 부담률이 1.0(100%) 이상이면 신뢰도가 낮아도 위험을 유지합니다. 보증금(+선순위)이 시세 이상인 깡통전세 기준이며(팀 합의), `source` 끝에 그 이유를 붙입니다.
-- 특약 추출에 실패했거나 직접 쓴 특약 구역이 `failed`이면 `SPECIAL_TERMS_CHECK_NEEDED`(확인필요, "특약 확인 필요")를 넣습니다. 등급에는 반영하지 않습니다.
+- 특약 추출에 실패했거나 기본특약·직접 쓴 특약 중 어느 구역이든 `failed`이면 `SPECIAL_TERMS_CHECK_NEEDED`(확인필요, "특약 확인 필요")를 넣습니다. 등급에는 반영하지 않습니다. 이때 `data_status`의 `special_terms`도 `failed`입니다.
+- 비율 구간 판정은 반올림 전 금액으로 합니다(`exact_ratios`). 카드와 신호의 비율 값은 소수 넷째 자리 표시값입니다. 신뢰도 낮음일 때 100% 이상인지도 반올림 전 값으로 봅니다.
+- `special_terms.external_send_allowed`는 추출 모듈 값을 그대로 싣고, 값이 없거나 추출에 실패하면 `false`입니다.
 
 ### 등급
 

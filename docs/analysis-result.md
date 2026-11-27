@@ -49,7 +49,9 @@
 | `flags[]` | 신호 하나당 객체 하나. `code`, `level`(`안전`, `주의`, `위험`, `확인필요`), `value`, `threshold`, `source` |
 | `special_terms.extraction_status` | 특약 구역 추출 상태. `ok`, `failed`. 실패하면 AI는 누락 대신 판단 보류로 처리 |
 | `special_terms.section_text` | 마스킹을 마친 특약 구역 텍스트. 실패하면 `null` |
-| `special_terms.masked` | 개인정보(주민번호·전화·계좌·전자우편·당사자 이름)를 가렸는지 |
+| `special_terms.masked` | 개인정보(주민번호·전화·계좌·전자우편·당사자 이름) 마스킹 처리를 했는지. 개인정보가 하나도 없다는 보장은 아님 |
+| `special_terms.external_send_allowed` | 특약 텍스트를 외부 LLM에 보내도 되는지. 마스킹 뒤에도 주소나 이름으로 보이는 글자가 남으면 `false`. AI 모듈은 `masked`가 아니라 이 값을 보고 보냄 |
+| `special_terms.masking` | `counts`(종류별로 가린 개수), `residual_risks`(남은 위험: `ADDRESS`, `POSSIBLE_NAME`). 성공일 때만 |
 | `special_terms.page` | 특약 칸이 시작하는 쪽 |
 | `special_terms.form` | `standard_2023`(2023.10 개정 표준계약서 기본특약 확인) 또는 `unknown`. 성공일 때만 |
 | `special_terms.base_terms[]` | 양식에 인쇄된 기본특약 ①-⑥. `no`, `text`, `note`, `choice`(체크박스 선택), `choice_status`(`selected`, `none_selected`, `unreadable`, `not_applicable`). 성공일 때만 |
@@ -66,10 +68,12 @@
 - 시세를 못 구했거나, 등기부를 못 읽었거나, 선순위 금액을 모르면 `판단보류`입니다.
 - 다가구 등 집합건물이 아니면 `HIDDEN_SENIOR_CLAIM_CHECK_NEEDED`("다른 세대의 선순위 보증금 확인 필요")를 띄웁니다. 다른 세대 보증금 합계(`other_tenant_deposits`)를 모르면 `판단보류`이고, 입력하면 선순위에 더해 계산합니다.
 - 시세 신뢰도가 `낮음`이면 가격 신호만 `주의`까지 낮추고, 가격 카드에 `confidence_label`을 붙입니다. 단, 비율이 100% 이상이면 신뢰도와 관계없이 `위험`입니다.
+- 비율 구간 판정은 반올림 전 금액(보증금, 선순위, 시세)으로 합니다. `price_card`의 비율과 신호 `value`는 소수 넷째 자리로 반올림한 표시값이라, 예를 들어 0.80001은 0.8로 보이지만 80% 초과라 `위험`입니다.
 - 그 밖에는 `flags`에서 가장 높은 `level`이 등급입니다. `확인필요`는 등급에 반영하지 않습니다.
 
 ## 특약 표시 (팀 합의 2026-11-27)
 
 - 특약 추출에 실패하면 특약 부분만 판단보류이고, 전체 등급은 바뀌지 않습니다.
-- 대신 `flags`에 `SPECIAL_TERMS_CHECK_NEEDED`(확인필요, "특약 확인 필요")를 넣어 전체 요약에 보이게 합니다. 직접 쓴 특약 구역만 `failed`여도 넣습니다.
+- 대신 `flags`에 `SPECIAL_TERMS_CHECK_NEEDED`(확인필요, "특약 확인 필요")를 넣어 전체 요약에 보이게 합니다. 기본특약·직접 쓴 특약 중 어느 구역이든 `failed`이면 넣습니다.
+- 어느 구역이든 `failed`이면 `data_status`의 `special_terms`도 `failed`(전체 `incomplete`)입니다. 읽은 구역의 텍스트는 그대로 넘기고, 어느 구역을 못 읽었는지는 `section_status`로 구분합니다.
 - 화면에서 "특약 없음"은 `special_terms.section_status.custom_terms`가 `empty`일 때만 씁니다. `failed`는 "특약 없음"으로 보여 주지 않습니다.

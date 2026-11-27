@@ -88,6 +88,7 @@
   "special_terms": {
     "extraction_status": "failed",
     "masked": true,
+    "external_send_allowed": false,
     "page": null,
     "section_text": null,
     "section_status": {

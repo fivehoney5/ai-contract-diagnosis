@@ -42,6 +42,7 @@ PRICE_CARD_KEYS = (
     "base_date", "trade_period", "confidence", "jeonse_ratio", "senior_burden_ratio",
 )
 SECTION_READ, SECTION_EMPTY, SECTION_FAILED = "read", "empty", "failed"  # 읽음 / 비어 있음 / 추출 실패
+SECTION_NAMES = {"base_terms": "기본특약(①-⑥)", "custom_terms": "직접 쓴 특약(※ 기타)"}
 CAP_NOTE = " (시세 신뢰도 낮음: 주의까지만 반영)"
 NO_CAP_NOTE = " (시세 신뢰도 낮음이지만 {pct} 이상이라 위험 유지, 깡통전세 기준(팀 확인 필요))"
 
@@ -67,17 +68,32 @@ def band_level(ratio: float | None, caution: float, danger: float) -> str | None
     return None
 
 
+def exact_ratios(price_card: dict) -> dict:
+    """판정용 비율. 카드의 비율은 소수 넷째 자리로 반올림한 표시값이라(0.80001 -> 0.8) 경계에서 등급이 바뀔 수 있으므로,
+    금액이 있으면 원래 금액으로 다시 나눈다. 금액이 없으면 카드 값을 쓴다."""
+    price, deposit, senior = (price_card.get(k) for k in ("estimated_price", "deposit", "senior_amount_used"))
+    out = {"jeonse_ratio": price_card.get("jeonse_ratio"), "senior_burden_ratio": price_card.get("senior_burden_ratio")}
+    if price and deposit is not None:
+        out["jeonse_ratio"] = deposit / price
+        if senior is not None:
+            out["senior_burden_ratio"] = (senior + deposit) / price
+    return out
+
+
 def ratio_flags(price_card: dict, cfg: RiskConfig = DEFAULT_CONFIG) -> list[dict]:
-    """가격 카드의 전세가율·선순위 부담률로 신호를 만든다. threshold에는 걸린 level의 경계값."""
+    """가격 카드의 전세가율·선순위 부담률로 신호를 만든다. threshold에는 걸린 level의 경계값.
+
+    판정은 exact_ratios(원래 금액)로 하고, 신호 value에는 카드와 같은 반올림 표시값을 넣는다.
+    """
+    exact = exact_ratios(price_card)
     flags = []
     for code, key, caution, danger, source in (
         (JEONSE_RATIO_HIGH, "jeonse_ratio", cfg.jeonse_caution, cfg.jeonse_danger, jeonse_source(cfg)),
         (SENIOR_BURDEN_HIGH, "senior_burden_ratio", cfg.senior_caution, cfg.senior_danger, senior_source(cfg)),
     ):
-        ratio = price_card.get(key)
-        level = band_level(ratio, caution, danger)
+        level = band_level(exact[key], caution, danger)
         if level is not None:
-            flags.append(_flag(code, level, ratio, danger if level == LEVEL_DANGER else caution, source))
+            flags.append(_flag(code, level, price_card.get(key), danger if level == LEVEL_DANGER else caution, source))
     return flags
 
 
@@ -105,7 +121,8 @@ def merge_flags(*groups: list[dict]) -> list[dict]:
     return sorted(flags, key=lambda f: -_rank(f["level"]))  # sorted는 안정 정렬이라 같은 level은 들어온 순서
 
 
-def cap_low_confidence(flags: list[dict], confidence: str | None, cfg: RiskConfig = DEFAULT_CONFIG) -> list[dict]:
+def cap_low_confidence(flags: list[dict], confidence: str | None, cfg: RiskConfig = DEFAULT_CONFIG,
+                       exact: dict | None = None) -> list[dict]:
     """시세 신뢰도가 낮으면 시세 영역 신호의 위험을 주의로 낮춘다.
 
     단, 비율 신호 값이 cfg.no_cap_ratio(1.0) 이상이면 낮추지 않는다 (보증금·선순위가 시세 이상, 깡통전세).
@@ -116,6 +133,9 @@ def cap_low_confidence(flags: list[dict], confidence: str | None, cfg: RiskConfi
     for f in flags:
         if f["code"] in cfg.price_area_codes and f["level"] == LEVEL_DANGER:
             v = f.get("value")
+            key = {JEONSE_RATIO_HIGH: "jeonse_ratio", SENIOR_BURDEN_HIGH: "senior_burden_ratio"}.get(f["code"])
+            if exact and key and exact.get(key) is not None:
+                v = exact[key]  # 반올림 전 값으로 100% 이상인지 본다
             if f["code"] in cfg.no_cap_codes and v is not None and v >= cfg.no_cap_ratio:
                 note = NO_CAP_NOTE.format(pct=f"{round(cfg.no_cap_ratio * 100):g}%")
                 f = dict(f, source=(f.get("source") or "") + note)
@@ -182,16 +202,23 @@ def special_terms_part(st: dict | None) -> tuple[dict, dict | None]:
     block = {
         "extraction_status": "ok" if ok else "failed",
         "masked": bool(st.get("masked", False)),
+        # 외부 LLM으로 보내도 되는지. masked와 별개. 추출 모듈이 판단하지 않은 입력은 보내지 않는다
+        "external_send_allowed": bool(st.get("external_send_allowed", False)) and ok,
         "page": st.get("page"),
         "section_text": st.get("section_text") if ok else None,
         "section_status": _section_status(st) if ok else {"base_terms": SECTION_FAILED, "custom_terms": SECTION_FAILED},
     }
     if ok:
         # 특약 추출 모듈(document/contract)이 주는 나눈 결과. AI 모듈이 직접 쓴 특약만 골라 볼 수 있게 넘긴다
-        for key in ("form", "base_terms", "custom_terms", "custom_terms_text", "warnings"):
+        for key in ("form", "base_terms", "custom_terms", "custom_terms_text", "warnings", "masking"):
             if key in st:
                 block[key] = st[key]
     if ok:
+        failed = [SECTION_NAMES[k] for k in ("base_terms", "custom_terms") if block["section_status"][k] == SECTION_FAILED]
+        if failed:
+            # 일부 구역만 못 읽어도 데이터 상태는 실패(전체 incomplete). 어느 구역인지는 section_status로 구분
+            return _status("special_terms", "failed", PARSE_FAILED,
+                           f"계약서 특약 중 {'·'.join(failed)}을 읽지 못했습니다. 그 부분의 특약 누락 여부는 판단 보류합니다."), block
         return _status("special_terms", "ok"), block
     reason = st.get("reason") or "계약서에서 특약 구역을 읽지 못했습니다. 특약 누락 여부는 판단 보류합니다."
     return _status("special_terms", "failed", st.get("reason_code") or PARSE_FAILED, reason), block
@@ -210,9 +237,11 @@ def special_terms_flags(block: dict | None) -> list[dict]:
     """특약을 읽지 못했으면 전체 요약(신호 목록)에 "특약 확인 필요"를 넣는다. 확인필요라 등급에는 반영하지 않음."""
     if block is None:
         return []
-    if block["extraction_status"] == "ok" and block["section_status"]["custom_terms"] != SECTION_FAILED:
+    status = block["section_status"]
+    failed = [SECTION_NAMES[k] for k in ("base_terms", "custom_terms") if status[k] == SECTION_FAILED]
+    if block["extraction_status"] == "ok" and not failed:
         return []
-    what = "특약 구역" if block["extraction_status"] != "ok" else "직접 쓴 특약(※ 기타)"
+    what = "특약 구역" if block["extraction_status"] != "ok" or len(failed) == 2 else failed[0]
     return [_flag(SPECIAL_TERMS_CHECK_NEEDED, LEVEL_CHECK, None, None,
                   f"특약 확인 필요. 계약서에서 {what}을 읽지 못함 (특약이 없다는 뜻이 아님). "
                   "특약 누락 여부는 판단 보류, 계약서 원본의 특약사항 칸을 직접 확인")]
@@ -318,7 +347,7 @@ def build_analysis_result(
         address_flags(address, registry),
         special_terms_flags(st_block),
     )
-    flags = cap_low_confidence(flags, card.get("confidence"), config)
+    flags = cap_low_confidence(flags, card.get("confidence"), config, exact_ratios(card))
     flags = sorted(flags, key=lambda f: -_rank(f["level"]))
 
     return {
