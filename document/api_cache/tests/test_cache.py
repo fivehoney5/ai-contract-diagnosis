@@ -8,7 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import date
+from datetime import date, datetime
 from unittest import mock
 
 import requests
@@ -292,6 +292,7 @@ class AnalyzePriceDataSourceTests(unittest.TestCase):
         r1 = self.run_price(cache, FakeSession(FakeResp(rtms_xml(3))))
         self.assertEqual(r1["data_status_item"]["data_source"], DATA_SOURCE_API)
         self.assertIsNone(r1["data_status_item"]["reason"])
+        self.assertIsNone(r1["data_status_item"]["data_saved_at"])
 
         down = FakeSession(requests.ConnectionError("x"))
         r2 = self.run_price(cache, down)
@@ -303,6 +304,10 @@ class AnalyzePriceDataSourceTests(unittest.TestCase):
         item = r3["data_status_item"]
         self.assertEqual((item["status"], item["data_source"]), ("ok", DATA_SOURCE_STALE))
         self.assertIn("저장해 둔 데이터", item["reason"])
+        saved = datetime.fromisoformat(item["data_saved_at"])
+        self.assertEqual(item["data_saved_at"][-6:], "+09:00")
+        self.assertLess(abs(saved.timestamp() - time.time()), 60)
+        self.assertIsNotNone(r2["data_status_item"]["data_saved_at"])
         self.assertEqual(r3["price_card"]["estimated_price"], r1["price_card"]["estimated_price"])
 
     def test_too_old_stale_fails_as_api_unavailable(self):

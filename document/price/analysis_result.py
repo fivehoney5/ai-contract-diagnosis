@@ -32,7 +32,7 @@ from .estimator import (
     estimate_price,
     is_jibun,
 )
-from ..api_cache import summarize_events, track_cache_usage
+from ..api_cache import cache_saved_at, summarize_events, track_cache_usage
 from .rtms_client import RTMSApiError, RTMSParseError, normalize_type, type_label
 
 # 팀 공통 실패 코드 (docs/analysis-result.md의 data_status.items[].reason_code)
@@ -147,12 +147,14 @@ def build_price_result(
     inflation_threshold: float = INFLATION_THRESHOLD,
     data_source: str | None = None,
     cache_note: str | None = None,
+    data_saved_at: str | None = None,
 ) -> dict:
     """추정 결과(est)를 팀 형식 조각으로 바꾼다 (네트워크 호출 없음).
 
     failure     : API 호출 자체가 실패했을 때 (팀 실패 코드, 이유). 이때 est는 None.
     data_source : 공공 API 응답을 어디서 받았는지 (api / cache / stale_cache). 모르면 None
     cache_note  : stale_cache일 때 안내 문구. 성공이면 reason에 넣는다
+    data_saved_at : cache·stale_cache일 때 캐시 데이터 저장 시각(ISO 8601, +09:00). api면 None
     """
     price = est.price if est is not None and est.status == "estimated" else None
 
@@ -167,6 +169,7 @@ def build_price_result(
     else:
         status_item = {"part": "price", "status": "ok", "reason_code": None, "reason": cache_note}
     status_item["data_source"] = data_source
+    status_item["data_saved_at"] = data_saved_at
 
     senior_ratio = None
     if senior_amount_used is not None:
@@ -254,6 +257,7 @@ def analyze_price(
         except RuntimeError as e:  # RTMSApiError, .env에 키가 없음
             est, error = None, e
     common["data_source"], common["cache_note"] = summarize_events(events)
+    common["data_saved_at"] = cache_saved_at(events)
 
     if isinstance(error, RTMSParseError):
         return build_price_result(None, failure=(PARSE_FAILED, f"실거래가 응답을 읽지 못했습니다: {error}"), **common)

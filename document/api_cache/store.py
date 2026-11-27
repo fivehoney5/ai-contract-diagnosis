@@ -24,7 +24,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Protocol
 
@@ -199,6 +199,24 @@ def summarize_events(events: list[CacheEvent]) -> tuple[str | None, str | None]:
     if all(e.source == DATA_SOURCE_CACHE for e in events):
         return DATA_SOURCE_CACHE, None
     return DATA_SOURCE_API, None
+
+
+KST = timezone(timedelta(hours=9))
+
+
+def cache_saved_at(events: list[CacheEvent]) -> str | None:
+    """캐시(만료 전·저장본)에서 꺼낸 데이터 중 가장 오래된 저장 시각 (ISO 8601, +09:00). API로만 받았으면 None.
+
+    data_source가 stale_cache면 저장본만, cache면 캐시 전체에서 고른다. 화면은 이 값으로 "11월 20일 저장" 등을 표시한다.
+    """
+    source, _ = summarize_events(events)
+    wanted = {DATA_SOURCE_STALE: (DATA_SOURCE_STALE,), DATA_SOURCE_CACHE: (DATA_SOURCE_CACHE,)}.get(source)
+    if wanted is None:
+        return None
+    times = [e.saved_at for e in events if e.source in wanted and e.saved_at is not None]
+    if not times:
+        return None
+    return datetime.fromtimestamp(min(times), KST).isoformat(timespec="seconds")
 
 
 def cached_call(

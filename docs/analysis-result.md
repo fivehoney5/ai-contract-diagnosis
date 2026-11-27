@@ -29,7 +29,8 @@
 | `data_status.overall` | `complete` 또는 `incomplete` (하나라도 실패하면 incomplete) |
 | `data_status.items[]` | 부분별 상태. `part`는 `price`, `registry`, `special_terms`, `status`는 `ok`, `failed`, `not_provided` |
 | `data_status.items[].reason_code` | 실패 코드. `ADDRESS_NOT_FOUND`, `NO_TRADES`, `API_UNAVAILABLE`, `PARSE_FAILED` |
-| `data_status.items[].data_source` | `price` 항목만. 공공 API(실거래가·건축물대장) 응답을 어디서 받았는지. `api`(새로 조회, 일부만 캐시여도 api), `cache`(모두 만료 전 캐시), `stale_cache`(API가 실패해 만료된 저장본 사용), API를 부르지 않았으면 `null`. `stale_cache`이고 `status`가 `ok`이면 `reason`에 저장 시각 안내가 들어갑니다. 화면에서 "저장된 데이터 기준"으로 표시할 수 있습니다 |
+| `data_status.items[].data_source` | `price` 항목만. 공공 API(실거래가·건축물대장) 응답을 어디서 받았는지. `api`(새로 조회, 일부만 캐시여도 api), `cache`(모두 만료 전 캐시), `stale_cache`(API가 실패해 만료된 저장본 사용), API를 부르지 않았으면 `null`. `stale_cache`이고 `status`가 `ok`이면 `reason`에 저장 시각 안내 문장이 들어갑니다. 화면 안내는 `stale_cache`일 때만 띄웁니다 (`cache`는 만료 전이라 사실상 최신). 만료 후 30일이 넘은 저장본은 쓰지 않고 `failed`(`API_UNAVAILABLE`)가 됩니다 |
+| `data_status.items[].data_saved_at` | `price` 항목만. `cache`·`stale_cache`일 때 사용한 캐시 데이터의 저장 시각(여러 건이면 가장 오래된 것). ISO 8601, `+09:00` (예: `"2026-11-20T14:30:00+09:00"`). `api`·`null`이면 `null`. 화면 날짜 표시는 `reason` 문장 대신 이 값을 씁니다 |
 | `property.housing_type` | 주택 유형. `아파트`, `오피스텔`, `연립다세대` |
 | `price_card.deposit` | 보증금 |
 | `price_card.senior_amount_used` | 선순위 계산에 실제 사용한 금액 (근저당은 채권최고액) |

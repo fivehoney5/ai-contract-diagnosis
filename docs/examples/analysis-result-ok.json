@@ -10,7 +10,8 @@
         "status": "ok",
         "reason_code": null,
         "reason": null,
-        "data_source": "api"
+        "data_source": "api",
+        "data_saved_at": null
       },
       {
         "part": "registry",

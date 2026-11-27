@@ -103,7 +103,8 @@ class ExampleContractTest(unittest.TestCase):
                                "jibun_address": "서울특별시 강서구 가상동 123-4 (가상 주소)"}}
         # 선순위는 analyze_price에 넣지 않고 등기부 결과에서 채워지는지도 함께 확인
         price = price_part(senior=None)
-        price["data_status_item"]["data_source"] = "api"  # 시세 항목의 data_source는 그대로 전달된다
+        # 시세 항목의 data_source·data_saved_at은 그대로 전달된다
+        price["data_status_item"].update(data_source="api", data_saved_at=None)
         result = build_analysis_result(
             price=price, registry=registry_part(senior=24_000_000), address=address,
             special_terms=copy.deepcopy(expected["special_terms"]),
@@ -116,7 +117,8 @@ class ExampleContractTest(unittest.TestCase):
         price = price_part(price=None, deposit=250_000_000, flags=[
             expected["flags"][0], VIOLATION,
         ], status={"status": "failed", "reason_code": "NO_TRADES",
-                   "reason": expected["data_status"]["items"][0]["reason"], "data_source": "cache"})
+                   "reason": expected["data_status"]["items"][0]["reason"], "data_source": "cache",
+                   "data_saved_at": expected["data_status"]["items"][0]["data_saved_at"]})
         price["property"] = {"address_key": "1150010300-0456-0007", "housing_type": "연립다세대",
                              "exclusive_area_m2": 24.5, "build_year": 2025}
         registry = registry_part(senior=0)
