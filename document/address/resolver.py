@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import re
 
-from .cache import AddressCache
+from ..api_cache import DATA_SOURCE_STALE, cached_call, default_cache, summarize_events, track_cache_usage
+from .cache import AddressCache, normalize_cache_key
 from .juso_client import (
     JusoApiError,
     JusoKeywordError,
@@ -23,6 +24,10 @@ PARSE_FAILED = "PARSE_FAILED"
 
 SOURCE = "행정안전부 도로명주소 검색 API (juso.go.kr)"
 MAX_CANDIDATES = 5
+
+CACHE_NAMESPACE = "juso"
+CACHE_TTL = 30 * 86400  # 주소는 잘 바뀌지 않지만 신축·도로명 변경이 있어서 한 달 뒤엔 다시 조회
+USE_DEFAULT_CACHE = object()  # cache를 따로 안 넘겼다는 표시
 
 # 끝에 붙은 "101동 1203호", "B동 302호", "제1203호", "401호". 동은 숫자·영문이나 한 글자(가동)만 인정한다
 # ("화곡동 401호"의 화곡동은 법정동 이름이라 건물 동으로 보지 않음).
@@ -164,6 +169,17 @@ def _result(status, reason_code=None, reason=None, address=None, candidates=None
 
 
 def _search(keyword, api_key, session, cache):
+    if cache is USE_DEFAULT_CACHE:
+        # 실제 네트워크를 쓸 때(session 없음)만 공통 캐시를 쓴다. API가 실패하면 만료된 저장본이라도 쓴다
+        common = default_cache() if session is None else None
+        result = cached_call(
+            CACHE_NAMESPACE, normalize_cache_key(keyword),
+            lambda: search_juso(keyword, api_key=api_key, session=session),
+            ttl_seconds=CACHE_TTL, cache=common,
+            fallback_errors=(JusoApiError, JusoParseError),  # 검색어 오류(JusoKeywordError)는 저장본으로 덮지 않음
+            dump=lambda v: [v[0], v[1]], load=lambda v: (int(v[0]), list(v[1])),
+        )
+        return result
     if cache is not None:
         hit = cache.get(keyword)
         if hit is not None:
@@ -181,11 +197,13 @@ def resolve_address(
     ho_nm: str | None = None,
     api_key: str | None = None,
     session=None,
-    cache: AddressCache | None = None,
+    cache: AddressCache | None = USE_DEFAULT_CACHE,  # type: ignore[assignment]
 ) -> dict:
     """주소 문자열을 주소 키와 법정동코드·지번·동·호로 바꾼다. 예외를 던지지 않는다.
 
     dong_nm, ho_nm을 넣으면 주소 끝에서 읽은 동·호보다 우선한다.
+    cache를 안 넘기면 공통 공공 API 캐시(document/api_cache)를 쓰고(session을 넣으면 안 씀),
+    None이면 캐시를 쓰지 않는다. API가 실패했는데 저장본이 있으면 그것으로 찾고 notes에 남긴다.
     결과 모양은 README.md 참고.
     """
     original = text or ""
@@ -197,14 +215,18 @@ def resolve_address(
         return _result("failed", ADDRESS_NOT_FOUND, "주소를 입력하세요 (예: 서울 강남구 테헤란로 152)", input_text=original)
 
     try:
-        total, juso = _search(keyword, api_key, session, cache)
-        if total == 0:
-            m = _CORE_RE.match(keyword)
-            core = m.group(1).strip() if m else ""
-            if core and core != keyword:
-                total, juso = _search(core, api_key, session, cache)
-                if total:
-                    notes.append(f"'{keyword}'로 찾지 못해 '{core}'로 다시 찾음")
+        with track_cache_usage() as events:
+            total, juso = _search(keyword, api_key, session, cache)
+            if total == 0:
+                m = _CORE_RE.match(keyword)
+                core = m.group(1).strip() if m else ""
+                if core and core != keyword:
+                    total, juso = _search(core, api_key, session, cache)
+                    if total:
+                        notes.append(f"'{keyword}'로 찾지 못해 '{core}'로 다시 찾음")
+        source, cache_note = summarize_events(events)
+        if source == DATA_SOURCE_STALE:
+            notes.append(cache_note.replace("공공 API", "도로명주소 API"))
     except JusoKeywordError as e:
         return _result("failed", ADDRESS_NOT_FOUND, f"주소 검색어 오류: {e.message} ({e.code})", input_text=original)
     except JusoParseError as e:

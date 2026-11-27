@@ -23,11 +23,14 @@ from dataclasses import dataclass, field, asdict
 
 import requests
 
-from .rtms_client import RTMSApiError, SUCCESS_CODES, _get_with_retry, load_service_key
+from ..api_cache import cached_call
+from .rtms_client import USE_DEFAULT_CACHE, RTMSApiError, SUCCESS_CODES, _get_with_retry, load_service_key, resolve_cache
 
 BASE_URL = "https://apis.data.go.kr/1613000/BldRgstHubService"
 TITLE_OP = "getBrTitleInfo"
 EXPOS_OP = "getBrExposPubuseAreaInfo"
+CACHE_NAMESPACE = "building_register"
+CACHE_TTL = 30 * 86400  # 대장은 자주 바뀌지 않아서 30일
 
 # 주용도 코드 앞 2자리: 01 단독주택, 02 공동주택. 오피스텔은 업무시설(14)이지만 주거용으로 본다.
 RESIDENTIAL_PURPOSE_PREFIXES = ("01", "02")
@@ -123,7 +126,8 @@ def _t(item: ET.Element, tag: str) -> str:
     return (item.findtext(tag) or "").strip()
 
 
-def _call(http, op: str, params: dict, timeout: float) -> list[ET.Element]:
+def _call_api(http, op: str, params: dict, timeout: float) -> str:
+    """성공한 응답의 원본 XML 문자열. 오류면 BuildingRegisterError."""
     resp = _get_with_retry(http, f"{BASE_URL}/{op}", params, timeout, "건축물대장")
     if resp.status_code != 200:
         try:
@@ -131,7 +135,23 @@ def _call(http, op: str, params: dict, timeout: float) -> list[ET.Element]:
         except BuildingRegisterError as e:
             raise BuildingRegisterError(f"HTTP {resp.status_code}: {e}") from None
         raise BuildingRegisterError(f"건축물대장 HTTP {resp.status_code}: {resp.text[:200]!r}")
-    return _items(resp.text)
+    _items(resp.text)  # 오류 응답은 저장하지 않도록 여기서 확인
+    return resp.text
+
+
+def _call(http, op: str, params: dict, timeout: float, cache=None, service_key: str | None = None) -> list[ET.Element]:
+    """같은 조회 조건이면 캐시의 원본 응답을 쓴다. API가 실패하면 만료된 저장본이라도 쓴다."""
+    query = {k: v for k, v in params.items() if k != "serviceKey"}
+    key = op + ":" + ":".join(f"{k}={query[k]}" for k in sorted(query))
+
+    def fetch() -> str:
+        return _call_api(http, op, dict(query, serviceKey=service_key or load_service_key()), timeout)
+
+    text = cached_call(
+        CACHE_NAMESPACE, key, fetch,
+        ttl_seconds=CACHE_TTL, cache=cache, fallback_errors=(RuntimeError,),
+    )
+    return _items(text)
 
 
 def fetch_building_info(
@@ -144,6 +164,7 @@ def fetch_building_info(
     service_key: str | None = None,
     session: requests.Session | None = None,
     timeout: float = 10.0,
+    cache=USE_DEFAULT_CACHE,
 ) -> BuildingInfo:
     """주소로 건축년도·주용도(와 호를 넣으면 그 호의 용도)를 가져온다.
 
@@ -152,19 +173,20 @@ def fetch_building_info(
     jibun       : '355-14' 같은 지번
     dong_nm     : 대장상 동 이름 (예: 'A동'). 여러 동이 있는 건물에서 정확히 고를 때
     ho_nm       : 호 (예: '401'). 넣으면 그 호의 전유부 용도도 확인
+    cache       : 안 넘기면 실제 네트워크를 쓸 때(session 없음)만 기본 캐시를 쓴다. None이면 캐시 안 씀
     """
     sgg, bjd = split_bjdong_code(bjdong_code, sigungu_cd)
     plat_gb, bun, ji = parse_jibun(jibun)
-    key = service_key or load_service_key()
+    use = resolve_cache(cache, session)
     http = session or requests.Session()
     base = {
-        "serviceKey": key, "sigunguCd": sgg, "bjdongCd": bjd,
+        "sigunguCd": sgg, "bjdongCd": bjd,
         "platGbCd": plat_gb, "bun": bun, "ji": ji, "numOfRows": 100, "pageNo": 1,
     }
     info = BuildingInfo(sigungu_cd=sgg, bjdong_cd=bjd, jibun=jibun.strip(), found=False)
     info.notes.append(CHECK_VIOLATION_MESSAGE)
 
-    titles = _call(http, TITLE_OP, base, timeout)
+    titles = _call(http, TITLE_OP, base, timeout, use, service_key)
     if not titles:
         info.notes.append("건축물대장 표제부에서 이 지번의 건물을 찾지 못했습니다 (법정동코드·지번 확인).")
         return info
@@ -205,7 +227,7 @@ def fetch_building_info(
         params = dict(base, hoNm=ho_nm)
         if dong_nm:
             params["dongNm"] = dong_nm
-        units = [u for u in _call(http, EXPOS_OP, params, timeout) if _t(u, "exposPubuseGbCdNm") == "전유"]
+        units = [u for u in _call(http, EXPOS_OP, params, timeout, use, service_key) if _t(u, "exposPubuseGbCdNm") == "전유"]
         units = [u for u in units if _t(u, "hoNm") == ho_nm and (not dong_nm or _t(u, "dongNm") == dong_nm)]
         judged = [
             (u, is_residential_purpose(_t(u, "mainPurpsCd"), _t(u, "mainPurpsCdNm"), _t(u, "etcPurps")))

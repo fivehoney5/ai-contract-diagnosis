@@ -167,7 +167,7 @@ API 오류도 예외 대신 `data_status_item`의 실패 코드로 돌려줍니�
 지금은 만들지 않았고, 붙일 때 아래 입력과 연결 지점을 쓰면 됩니다.
 
 - **주소 → 법정동코드 변환 (도로명주소 API)**: 계약서 주소에서 `lawd_cd`(앞 5자리), `bjdong_cd`(10자리), 법정동 이름(`dong`, 실거래가의 `umdNm`과 같은 이름), 지번(`jibun`, 예: "355-14", 산 여부 포함), 건물명, 동·호(`dong_nm`, `ho_nm`)를 돌려주면 `analyze_price`에 그대로 넣을 수 있습니다. 변환에 실패하면 `ADDRESS_NOT_FOUND`로 돌려주면 됩니다.
-- **조회 결과 캐시 (SQLite)**: `estimate_price`와 `analyze_price`는 `fetcher(ptype, lawd_cd, months, today)`와 `building_fetcher(bjdong_cd, jibun, sigungu_cd=, dong_nm=, ho_nm=)`를 바꿔 끼울 수 있습니다. 캐시는 이 두 함수를 감싸서 (유형, 시군구, 년월)과 (법정동코드, 지번)을 키로 저장하면 됩니다. 이번 달 거래는 신고가 늦게 들어오므로 짧게 보관하는 것이 좋습니다.
+- **조회 결과 캐시 (SQLite)**: 실거래가는 (유형, 시군구, 연월), 건축물대장은 조회 조건을 키로 공통 캐시에 저장합니다. 만료, API 장애 때 저장본 사용, 설정은 [공공 API 캐시](../api_cache/README.md)를 참고하세요. `analyze_price` 결과의 `data_status_item.data_source`로 캐시를 썼는지 알 수 있습니다.
 
 ## 사용하는 API
 

@@ -85,7 +85,8 @@ class OkExampleTests(unittest.TestCase):
         self.assertIsInstance(card["estimated_price"], int)
 
     def test_status_and_property(self):
-        self.assertEqual(self.r["data_status_item"], OK_EXAMPLE["data_status"]["items"][0])
+        # 거래 목록을 직접 넣어서 API를 부르지 않았으니 data_source는 None (예시는 api)
+        self.assertEqual(self.r["data_status_item"], dict(OK_EXAMPLE["data_status"]["items"][0], data_source=None))
         prop, ex = self.r["property"], OK_EXAMPLE["property"]
         for key in ("address_key", "housing_type", "exclusive_area_m2", "build_year"):
             self.assertEqual(prop[key], ex[key], key)
