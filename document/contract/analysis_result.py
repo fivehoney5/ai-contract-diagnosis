@@ -34,11 +34,12 @@ def _failed(reason: str, *, source: str | None = None, page_count: int | None = 
     }
 
 
-def analyze_contract(sources, *, engine=None, mask: bool = True) -> dict:
+def analyze_contract(sources, *, engine=None, mask: bool = True, is_demo_data: bool = False) -> dict:
     """계약서 PDF 또는 사진(여러 장이면 리스트, 쪽 순서대로)을 읽어 특약 구역을 돌려준다.
 
     sources: 경로, bytes, 파일 객체 또는 그 리스트. engine: OCR 엔진(생략하면 RapidOCR).
     mask: 개인정보(주민번호·전화·계좌·전자우편·당사자 이름)를 가린다. 끄는 것은 테스트·확인용.
+    is_demo_data: 시연용 가상 계약서일 때만 True. 실제 계약서(기본값)는 외부 LLM 전송을 막는다(external_send_allowed=False).
     """
     try:
         doc = read_contract(sources, engine=engine)
@@ -74,4 +75,4 @@ def analyze_contract(sources, *, engine=None, mask: bool = True) -> dict:
         "source": doc.source,
         "page_count": doc.page_count,
     }
-    return mask_special_terms(out, [ln.text for ln in doc.lines]) if mask else out
+    return mask_special_terms(out, [ln.text for ln in doc.lines], is_demo_data=is_demo_data) if mask else out

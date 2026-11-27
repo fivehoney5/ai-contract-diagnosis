@@ -11,8 +11,10 @@
 금액(360,000,000원), 날짜(2027.1.29, 2027-01-29), 조항 번호는 건드리지 않는다.
 
 masked는 "마스킹 처리를 했다"는 뜻일 뿐 개인정보가 하나도 없다는 보장이 아니다.
-외부 LLM 전송 여부는 external_send_allowed로 따로 판단한다: 가린 뒤에도 주소나 이름으로 보이는 글자가 남으면
-False이고, 남은 것의 종류를 masking.residual_risks에 적는다 (리뷰 반영, 실제 문서 연동 전 안전장치).
+외부 LLM 전송 여부는 external_send_allowed로 따로 판단한다 (PR #11 리뷰 반영):
+    - 실제 계약서는 기본 차단 (is_demo_data=False). OCR이 붙여 읽은 이름 등 규칙으로 못 잡는 개인정보가 있을 수 있음
+    - 시연용 가상 계약서(is_demo_data=True)도 가린 뒤 주소나 이름으로 보이는 글자가 남으면 차단
+남은 것의 종류는 masking.residual_risks, 차단 이유는 masking.external_send_blocked_by에 적는다.
 """
 
 from __future__ import annotations
@@ -101,8 +103,12 @@ def mask_text(text: str | None, names: list[str], counts: dict) -> str | None:
     return text
 
 
-def mask_special_terms(result: dict, all_texts: list[str]) -> dict:
-    """analyze_contract 결과(성공)의 텍스트 칸을 모두 가리고 masked=True로 바꾼다."""
+def mask_special_terms(result: dict, all_texts: list[str], *, is_demo_data: bool = False) -> dict:
+    """analyze_contract 결과(성공)의 텍스트 칸을 모두 가리고 masked=True로 바꾼다.
+
+    is_demo_data: 시연용 가상 계약서일 때만 True. 실제 계약서(기본값)는 남은 위험이 없어도 외부 전송을 막는다.
+    OCR이 "임차인홍길동은"처럼 붙여 읽은 이름은 글자 규칙으로 다 잡을 수 없기 때문 (PR #11 리뷰, 팀 합의 필요).
+    """
     names = party_names(all_texts)
     counts: dict = {}
     out = dict(result)
@@ -115,7 +121,14 @@ def mask_special_terms(result: dict, all_texts: list[str]) -> dict:
     out["custom_terms"] = [{**t, "text": mask_text(t["text"], names, {})} for t in result.get("custom_terms", [])]
     out["masked"] = True
     risks = residual_risks(out["section_text"])
-    out["masking"] = {"counts": counts, "party_names_found": len(names), "residual_risks": risks}
-    # 외부 LLM 전송은 남은 위험이 없을 때만 허용. AI 모듈은 masked가 아니라 이 값을 본다
-    out["external_send_allowed"] = not risks
+    # 외부 LLM 전송은 시연용 가상 데이터이고 남은 위험이 없을 때만 허용. AI 모듈은 masked가 아니라 이 값을 본다
+    if not is_demo_data:
+        blocked_by = "REAL_DOCUMENT"  # 실제 계약서는 기본 차단
+    elif risks:
+        blocked_by = "RESIDUAL_RISK"
+    else:
+        blocked_by = None
+    out["masking"] = {"counts": counts, "party_names_found": len(names), "residual_risks": risks,
+                      "is_demo_data": is_demo_data, "external_send_blocked_by": blocked_by}
+    out["external_send_allowed"] = blocked_by is None
     return out

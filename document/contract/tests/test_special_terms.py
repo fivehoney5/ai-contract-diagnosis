@@ -284,8 +284,11 @@ class SampleTest(unittest.TestCase):
             self.assertGreaterEqual(ratio, 1.0 if exact else 0.95, got["text"])
 
     def test_pdf(self):
-        r = analyze_contract(os.path.join(SAMPLES, "fake_contract_jeonse.pdf"))
+        path = os.path.join(SAMPLES, "fake_contract_jeonse.pdf")
+        r = analyze_contract(path, is_demo_data=True)
         self.check(r, exact=True)
+        self.assertTrue(r["external_send_allowed"])  # 가상 샘플은 남은 위험이 없어 전송 가능
+        self.assertFalse(analyze_contract(path)["external_send_allowed"])  # 실제 계약서로 넘기면 기본 차단
         self.assertEqual(r["base_terms"][3]["choice"], "동의")
 
     def test_photos(self):

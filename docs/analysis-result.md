@@ -50,8 +50,8 @@
 | `special_terms.extraction_status` | 특약 구역 추출 상태. `ok`, `failed`. 실패하면 AI는 누락 대신 판단 보류로 처리 |
 | `special_terms.section_text` | 마스킹을 마친 특약 구역 텍스트. 실패하면 `null` |
 | `special_terms.masked` | 개인정보(주민번호·전화·계좌·전자우편·당사자 이름) 마스킹 처리를 했는지. 개인정보가 하나도 없다는 보장은 아님 |
-| `special_terms.external_send_allowed` | 특약 텍스트를 외부 LLM에 보내도 되는지. 마스킹 뒤에도 주소나 이름으로 보이는 글자가 남으면 `false`. AI 모듈은 `masked`가 아니라 이 값을 보고 보냄 |
-| `special_terms.masking` | `counts`(종류별로 가린 개수), `residual_risks`(남은 위험: `ADDRESS`, `POSSIBLE_NAME`). 성공일 때만 |
+| `special_terms.external_send_allowed` | 특약 텍스트를 외부 LLM에 보내도 되는지. 실제 계약서는 기본 `false`이고, 시연용 가상 계약서(`is_demo_data`)이면서 마스킹 뒤 주소나 이름으로 보이는 글자가 없을 때만 `true`. AI 모듈은 `masked`가 아니라 이 값을 보고 보냄 |
+| `special_terms.masking` | `counts`(종류별로 가린 개수), `residual_risks`(남은 위험: `ADDRESS`, `POSSIBLE_NAME`), `is_demo_data`, `external_send_blocked_by`(`REAL_DOCUMENT`, `RESIDUAL_RISK`, 허용이면 `null`). 성공일 때만 |
 | `special_terms.page` | 특약 칸이 시작하는 쪽 |
 | `special_terms.form` | `standard_2023`(2023.10 개정 표준계약서 기본특약 확인) 또는 `unknown`. 성공일 때만 |
 | `special_terms.base_terms[]` | 양식에 인쇄된 기본특약 ①-⑥. `no`, `text`, `note`, `choice`(체크박스 선택), `choice_status`(`selected`, `none_selected`, `unreadable`, `not_applicable`). 성공일 때만 |

@@ -63,13 +63,23 @@ class ResidualRiskTest(unittest.TestCase):
 
     def test_result_flag(self):
         base = {"base_terms": [], "custom_terms": [], "masked": False}
-        ok = mask_special_terms(dict(base, section_text="1. 반려동물을 기르지 않는다."), [])
+        ok = mask_special_terms(dict(base, section_text="1. 반려동물을 기르지 않는다."), [], is_demo_data=True)
         self.assertTrue(ok["masked"])
         self.assertTrue(ok["external_send_allowed"])
-        bad = mask_special_terms(dict(base, section_text="1. 임차인 홍길동은 마들로 999에 산다."), [])
+        bad = mask_special_terms(dict(base, section_text="1. 임차인 홍길동은 마들로 999에 산다."), [], is_demo_data=True)
         self.assertTrue(bad["masked"])  # 마스킹은 했지만
         self.assertFalse(bad["external_send_allowed"])  # 외부로는 보내지 않는다
         self.assertEqual(bad["masking"]["residual_risks"], ["ADDRESS", "POSSIBLE_NAME"])
+        self.assertEqual(bad["masking"]["external_send_blocked_by"], "RESIDUAL_RISK")
+
+    def test_real_document_blocked_by_default(self):
+        # 리뷰 반영: OCR이 붙여 읽은 이름("임차인홍길동은")은 규칙으로 못 잡으므로 실제 계약서는 기본 차단
+        base = {"base_terms": [], "custom_terms": [], "masked": False}
+        r = mask_special_terms(dict(base, section_text="1. 임차인홍길동은 반려동물을 기르지 않는다."), [])
+        self.assertEqual(r["masking"]["residual_risks"], [])  # 규칙으로는 못 잡지만
+        self.assertFalse(r["external_send_allowed"])  # 실제 계약서라 보내지 않는다
+        self.assertEqual(r["masking"]["external_send_blocked_by"], "REAL_DOCUMENT")
+        self.assertFalse(r["masking"]["is_demo_data"])
 
 
 class PartyNamesTest(unittest.TestCase):
@@ -92,7 +102,7 @@ class MaskResultTest(unittest.TestCase):
             "custom_terms": [{"no": 1, "text": "1. 임차인 이하늘(010-1111-2222)에게 알린다."}],
             "masked": False,
         }
-        out = mask_special_terms(res, ["성 명 이하늘"])
+        out = mask_special_terms(res, ["성 명 이하늘"], is_demo_data=True)
         self.assertTrue(out["masked"])
         for key in ("section_text", "custom_terms_text"):
             self.assertNotIn("이하늘", out[key])
