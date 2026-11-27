@@ -39,7 +39,7 @@ class AnalysisEngine:
     analyze_registry: Callable[..., dict]
     build_analysis_result: Callable[..., dict]
     normalize_type: Callable[[str], str]
-    analyze_contract: Callable[..., dict] | None = None
+    analyze_contract: Callable[..., dict]
 
     @classmethod
     def from_document_modules(cls) -> "AnalysisEngine":
@@ -100,10 +100,7 @@ class AnalysisEngine:
 
         special_terms: dict | None = None
         if data.contract_files:
-            if self.analyze_contract is None:
-                notes.append("특약 분석 모듈이 아직 연결되지 않아 계약서는 읽지 않았습니다.")
-            else:
-                special_terms = self.analyze_contract(_one_or_list(data.contract_files))
+            special_terms = self.analyze_contract(_one_or_list(data.contract_files))
 
         result = self.build_analysis_result(
             address=address,

@@ -24,7 +24,7 @@ class Calls:
         self.registry_arg = None
 
 
-def fake_engine(calls: Calls, *, address=ADDRESS_OK, with_contract=True) -> AnalysisEngine:
+def fake_engine(calls: Calls, *, address=ADDRESS_OK) -> AnalysisEngine:
     def analyze_price(property_type, **kwargs):
         calls.price_kwargs = {"property_type": property_type, **kwargs}
         return {"data_status_item": {"part": "price", "status": "ok"}}
@@ -49,7 +49,7 @@ def fake_engine(calls: Calls, *, address=ADDRESS_OK, with_contract=True) -> Anal
         analyze_registry=lambda src: setattr(calls, "registry_arg", src) or REGISTRY_OK,
         build_analysis_result=build,
         normalize_type=normalize,
-        analyze_contract=contract if with_contract else None,
+        analyze_contract=contract,
     )
 
 
@@ -86,15 +86,15 @@ def test_engine_passes_registry_photos_as_list():
     assert calls.registry_arg == [b"p1", b"p2"]
 
 
-def test_engine_contract_pages_and_missing_module():
+def test_engine_passes_contract_pages():
     calls = Calls()
     fake_engine(calls).run(AnalysisInput("주소", "아파트", 1, contract_files=[b"a", b"b"]), "id4")
     assert calls.contract_arg == [b"a", b"b"]
+    assert calls.result_kwargs["special_terms"] == {"extraction_status": "ok"}
 
     calls = Calls()
-    out = fake_engine(calls, with_contract=False).run(AnalysisInput("주소", "아파트", 1, contract_files=[b"a"]), "id5")
-    assert calls.result_kwargs["special_terms"] is None
-    assert any("특약" in n for n in out.notes)
+    fake_engine(calls).run(AnalysisInput("주소", "아파트", 1), "id5")
+    assert calls.contract_arg is None and calls.result_kwargs["special_terms"] is None
 
 
 def test_real_risk_module_holds_grade_when_address_fails():
