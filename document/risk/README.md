@@ -95,6 +95,8 @@ result["grade"]   # 안전 / 주의 / 위험 / 판단보류
 
 `extraction_status`가 `ok`라도 텍스트가 비어 있으면 실패로 봅니다.
 
+[특약 구역 추출 모듈](../contract/README.md)의 `analyze_contract()` 결과를 그대로 넘기면 됩니다. 성공이면 `form`, `base_terms`, `custom_terms`, `custom_terms_text`, `warnings`도 `special_terms` 칸에 함께 실립니다.
+
 ## 팀 합의가 필요한 것
 
 1. 70% 주의 구간: 70/80(지금 값)과 기준표 초안 60/70 중 무엇으로 갈지. `config.py`에서 바꿉니다.

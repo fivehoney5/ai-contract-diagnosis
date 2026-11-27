@@ -42,6 +42,13 @@
 | `flags[]` | 신호 하나당 객체 하나. `code`, `level`(`안전`, `주의`, `위험`, `확인필요`), `value`, `threshold`, `source` |
 | `special_terms.extraction_status` | 특약 구역 추출 상태. `ok`, `failed`. 실패하면 AI는 누락 대신 판단 보류로 처리 |
 | `special_terms.section_text` | 마스킹을 마친 특약 구역 텍스트. 실패하면 `null` |
+| `special_terms.masked` | 개인정보(주민번호·전화·계좌·전자우편·당사자 이름)를 가렸는지 |
+| `special_terms.page` | 특약 칸이 시작하는 쪽 |
+| `special_terms.form` | `standard_2023`(2023.10 개정 표준계약서 기본특약 확인) 또는 `unknown`. 성공일 때만 |
+| `special_terms.base_terms[]` | 양식에 인쇄된 기본특약 ①-⑥. `no`, `text`, `note`, `choice`(체크박스 선택), `choice_status`(`selected`, `none_selected`, `unreadable`, `not_applicable`). 성공일 때만 |
+| `special_terms.custom_terms[]` | `※ 기타` 아래 당사자가 직접 쓴 특약. `no`, `text`. AI 모듈의 특약 검토 대상. 성공일 때만 |
+| `special_terms.custom_terms_text` | 직접 쓴 특약만 이은 텍스트. 없으면 `null`. 성공일 때만 |
+| `special_terms.warnings[]` | `CUSTOM_MARKER_NOT_FOUND`, `BASE_TERMS_INCOMPLETE`, `NO_CUSTOM_TERMS`, `LOW_OCR_CONFIDENCE`, `END_MARKER_NOT_FOUND`. 자세한 뜻은 [document/contract](../document/contract/README.md). 성공일 때만 |
 
 ## 등급 정하는 방법 (초안)
 

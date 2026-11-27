@@ -177,6 +177,11 @@ def special_terms_part(st: dict | None) -> tuple[dict, dict | None]:
         "section_text": st.get("section_text") if ok else None,
     }
     if ok:
+        # 특약 추출 모듈(document/contract)이 주는 나눈 결과. AI 모듈이 직접 쓴 특약만 골라 볼 수 있게 넘긴다
+        for key in ("form", "base_terms", "custom_terms", "custom_terms_text", "warnings"):
+            if key in st:
+                block[key] = st[key]
+    if ok:
         return _status("special_terms", "ok"), block
     reason = st.get("reason") or "계약서에서 특약 구역을 읽지 못했습니다. 특약 누락 여부는 판단 보류합니다."
     return _status("special_terms", "failed", st.get("reason_code") or PARSE_FAILED, reason), block
