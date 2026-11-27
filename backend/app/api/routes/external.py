@@ -65,7 +65,7 @@ async def law_detail(
 async def public_data(name: str, request: Request, data: DataClient) -> Any:
     """등록된 공공데이터 API를 호출합니다. 쿼리 파라미터는 그대로 전달됩니다.
 
-    예: /api/external/public-data/apt_rent?LAWD_CD=11110&DEAL_YMD=202410
+    예: /api/external/public-data/qna?pageNo=1
     """
     try:
         return await data.call(name, **dict(request.query_params))

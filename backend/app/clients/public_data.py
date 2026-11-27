@@ -17,19 +17,15 @@ SOURCE = "data.go.kr"
 
 @dataclass(frozen=True)
 class PublicDataApi:
-    path: str  # apis.data.go.kr 뒤 경로, 예: /1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent
+    path: str  # apis.data.go.kr 뒤 경로, 예: /기관코드/서비스명/오퍼레이션
     description: str
     default_params: dict[str, Any] = field(default_factory=dict)
 
 
 # 활용신청한 API를 여기에 등록합니다. 경로는 각 API 상세 페이지의 "요청주소"를 참고하세요.
+# 실거래가·건축물대장은 document/price 모듈이 직접 호출하므로 여기에 등록하지 않습니다.
 PUBLIC_DATA_APIS: dict[str, PublicDataApi] = {
-    "apt_rent": PublicDataApi(
-        path="/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent",
-        description="국토교통부 아파트 전월세 실거래가 (필수: LAWD_CD 지역코드 5자리, DEAL_YMD 계약년월 6자리)",
-        default_params={"pageNo": 1, "numOfRows": 100},
-    ),
-    # "qna": PublicDataApi(path="/...", description="전세사기 예방 백문백답"),
+    # "qna": PublicDataApi(path="/기관코드/서비스명/오퍼레이션", description="전세사기 예방 백문백답"),
 }
 
 

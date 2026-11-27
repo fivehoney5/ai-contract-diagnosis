@@ -52,11 +52,11 @@ uvicorn app.main:app --reload
 - `GET /api/external/status`: 키가 들어갔는지(값은 표시하지 않음)와 등록된 공공데이터 API 목록
 - `GET /api/external/law/search?query=주택임대차보호법`: 법령 검색 (`target=prec`이면 판례)
 - `GET /api/external/law/{ID}`: 법령·판례 본문
-- `GET /api/external/public-data/{이름}?...`: 등록된 공공데이터 API 호출, 예: `apt_rent?LAWD_CD=11110&DEAL_YMD=202410`
+- `GET /api/external/public-data/{이름}?...`: 등록된 공공데이터 API 호출 (쿼리 파라미터는 그대로 전달)
 
 ### 공공데이터 API 추가
 
-활용신청한 API는 [public_data.py](app/clients/public_data.py)의 `PUBLIC_DATA_APIS`에 이름과 요청 경로를 추가합니다. 경로는 API 상세 페이지의 요청주소에서 `https://apis.data.go.kr` 뒤 부분입니다. `serviceKey`는 자동으로 붙습니다.
+실거래가·건축물대장은 `document/price`가 직접 호출하므로 등록하지 않습니다. 그 밖에 서버에서 부를 API는 [public_data.py](app/clients/public_data.py)의 `PUBLIC_DATA_APIS`에 이름과 요청 경로를 추가합니다. 경로는 API 상세 페이지의 요청주소에서 `https://apis.data.go.kr` 뒤 부분입니다. `serviceKey`는 자동으로 붙습니다.
 
 ```python
 "qna": PublicDataApi(path="/기관코드/서비스명/오퍼레이션", description="설명"),
