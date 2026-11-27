@@ -28,6 +28,7 @@ NO_BUILDING_TRADES = "NO_BUILDING_TRADES"
 REGISTRY_ADDRESS_MISMATCH = "REGISTRY_ADDRESS_MISMATCH"
 PRICE_INFLATION_SUSPECTED = "PRICE_INFLATION_SUSPECTED"
 HIDDEN_SENIOR_CLAIM_CHECK_NEEDED = "HIDDEN_SENIOR_CLAIM_CHECK_NEEDED"
+SPECIAL_TERMS_CHECK_NEEDED = "SPECIAL_TERMS_CHECK_NEEDED"
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,9 @@ class RiskConfig:
     senior_caution: float = 0.7
     senior_danger: float = 0.8
 
-    # 시세 신뢰도가 이 값이면 시세 영역 신호는 주의까지만 반영
+    # 시세 신뢰도가 이 값이면 시세 영역(가격) 신호만 주의까지만 반영하고, 가격 카드에 low_confidence_label을 붙인다 (팀 합의 2026-11-27)
     low_confidence: str = "낮음"
+    low_confidence_label: str = "추정 시세 기준 · 신뢰도 낮음"
     price_area_codes: frozenset = field(default_factory=lambda: frozenset({
         JEONSE_RATIO_HIGH, SENIOR_BURDEN_HIGH, NO_BUILDING_TRADES, PRICE_INFLATION_SUSPECTED,
     }))
@@ -49,22 +51,26 @@ class RiskConfig:
     #   price    : 시세를 못 구해 비율 계산 불가 (analysis-result.md 초안 규칙)
     #   registry : 등기부를 못 읽음 (선순위·권리 제한을 알 수 없음)
     hold_parts: frozenset = field(default_factory=lambda: frozenset({"price", "registry"}))
-    # 특약 추출 실패는 특약 부분만 판단보류로 두고 전체 등급에는 반영하지 않음 [초안]
+    # 특약 추출 실패는 특약 부분만 판단보류로 두고 전체 등급에는 반영하지 않음 (팀 합의 2026-11-27).
+    # 대신 신호 목록에 SPECIAL_TERMS_CHECK_NEEDED(확인필요)를 넣어 전체 요약에 "특약 확인 필요"가 보이게 한다
     special_terms_failure_holds_grade: bool = False
     # 시세·등기부가 ok여도 선순위 부담률을 계산하지 못하면(선순위 금액을 못 읽음 등) 판단보류
     hold_when_senior_ratio_missing: bool = True
 
-    # 비율이 이 값 이상이면 시세 신뢰도가 낮아도 위험을 낮추지 않음 (깡통전세 기준, 팀 확인 필요)
+    # 비율이 이 값 이상이면 시세 신뢰도가 낮아도 위험을 낮추지 않음 (깡통전세 기준, 팀 합의 2026-11-27)
     no_cap_ratio: float = 1.0
     no_cap_codes: frozenset = field(default_factory=lambda: frozenset({JEONSE_RATIO_HIGH, SENIOR_BURDEN_HIGH}))
 
     # 입력 주소와 등기부 주소가 다르면 위험 신호가 있어도 판단보류 (다른 집 등기부일 수 있음) [초안]
     address_mismatch_holds_grade: bool = True
 
-    # 등급 하한: 이 신호가 있으면 등급이 안전이어도 이 등급까지 올린다 [초안, 팀 결정]
-    #   다가구 등 비집합건물: 다른 세입자 보증금이 등기부에 없어 선순위가 실제보다 적을 수 있음 (#8)
-    #   판단보류로 두면 다가구는 항상 판정이 안 나오므로 기본은 "최소 주의". "판단보류"로 바꿀 수도 있음
-    grade_floor: dict = field(default_factory=lambda: {HIDDEN_SENIOR_CLAIM_CHECK_NEEDED: GRADE_CAUTION})
+    # 다가구 등 비집합건물(HIDDEN_SENIOR_CLAIM_CHECK_NEEDED): 다른 세대 보증금이 등기부에 없어 선순위가 실제보다 적을 수 있음.
+    # 팀 합의 2026-11-27: "최소 주의" 대신 "다른 세대의 선순위 보증금 확인 필요"로 안내하고,
+    # 그 금액(other_tenant_deposits)을 모르면 판단보류 (선순위 금액을 모르면 판단보류 규칙과 같음)
+    hold_when_hidden_senior_unknown: bool = True
+
+    # 등급 하한: 이 신호가 있으면 등급이 안전이어도 이 등급까지 올린다. 지금은 비어 있음 (예전 다가구 최소 주의)
+    grade_floor: dict = field(default_factory=dict)
 
 
 DEFAULT_CONFIG = RiskConfig()

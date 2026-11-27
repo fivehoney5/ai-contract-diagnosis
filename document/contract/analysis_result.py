@@ -22,6 +22,7 @@ def _failed(reason: str, *, source: str | None = None, page_count: int | None = 
         "masking": None,
         "form": None,
         "base_terms": [],
+        "section_status": {"base_terms": "failed", "custom_terms": "failed"},
         "custom_marker_found": False,
         "custom_terms": [],
         "custom_terms_text": None,

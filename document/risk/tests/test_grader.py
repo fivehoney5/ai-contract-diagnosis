@@ -74,7 +74,11 @@ def registry_part(*, senior=0, flags=None, failed=False):
         "data_status_item": {"part": "registry", **OK},
         "property": {"address_display": "서울특별시 강서구 가상동 123-4", "road_address": None, "unit_no": "401",
                      "exclusive_area_m2": 29.8, "structure": None},
-        "senior_amount_used": senior, "registry_card": {}, "flags": flags or [], "detail": None,
+        "senior_amount_used": senior,
+        "registry_card": {"senior_amount_total": senior, "senior_amount_complete": senior is not None,
+                          "senior_amount_missing_count": 0 if senior is not None else 1,
+                          "counts": {"mortgage": 1 if senior else 0}},
+        "flags": flags or [], "detail": None,
     }
 
 
@@ -404,20 +408,74 @@ class ReviewFix2Test(unittest.TestCase):
         a = address_ok(jibun="경기도 남양주시 오남읍 양지리 5", ho=None)
         self.assertTrue(compare(a, registry_at("경기도 남양주시 오남읍 양지리 5"))["match"])
 
-    def test_multi_household_floor_caution(self):
+    # 팀 합의 2026-11-27: 다가구는 최소 주의 대신 "다른 세대의 선순위 보증금 확인 필요", 금액을 모르면 판단보류
+    def test_multi_household_unknown_deposits_holds(self):
         reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
         r = full(price=price_part(price=400_000_000), registry=reg)
-        self.assertEqual(r["grade"], "주의")
+        self.assertEqual(r["grade"], "판단보류")
+        self.assertIsNone(r["price_card"]["other_tenant_deposits"])
 
-    def test_floor_does_not_lower_danger(self):
+    def test_multi_household_danger_still_danger(self):
         reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
         self.assertEqual(full(price=price_part(price=240_000_000), registry=reg)["grade"], "위험")
 
-    def test_floor_configurable_to_hold(self):
+    def test_multi_household_with_user_deposits(self):
         reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
-        cfg = RiskConfig(grade_floor={"HIDDEN_SENIOR_CLAIM_CHECK_NEEDED": "판단보류"})
-        self.assertEqual(full(price=price_part(price=400_000_000), registry=reg, config=cfg)["grade"], "판단보류")
-        self.assertEqual(full(price=price_part(price=400_000_000), registry=reg, config=RiskConfig(grade_floor={}))["grade"], "안전")
+        # 시세 4억, 보증금 2억, 선순위 0 + 다른 세대 1억 -> (1억+2억)/4억 = 0.75 주의
+        r = full(price=price_part(price=400_000_000), registry=reg, other_tenant_deposits=100_000_000)
+        self.assertEqual(r["price_card"]["senior_amount_used"], 100_000_000)
+        self.assertEqual(r["price_card"]["senior_burden_ratio"], 0.75)
+        self.assertEqual(r["grade"], "주의")
+        r = full(price=price_part(price=400_000_000), registry=reg, other_tenant_deposits=0)
+        self.assertEqual(r["grade"], "안전")
+
+    def test_multi_household_hold_can_be_turned_off(self):
+        reg = registry_part(flags=[flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", "확인필요")])
+        cfg = RiskConfig(hold_when_hidden_senior_unknown=False)
+        self.assertEqual(full(price=price_part(price=400_000_000), registry=reg, config=cfg)["grade"], "안전")
+
+
+class TeamDecisionTest(unittest.TestCase):
+    """팀 합의 2026-11-27 (특약 확인 필요, 신뢰도 낮음 표시, 선순위 한 줄 요약)."""
+
+    def test_special_terms_failure_adds_check_flag(self):
+        r = full(special_terms={"extraction_status": "failed"})
+        codes = [f["code"] for f in r["flags"]]
+        self.assertIn("SPECIAL_TERMS_CHECK_NEEDED", codes)
+        self.assertEqual(r["grade"], "안전")  # 확인필요는 등급에 반영 안 함
+        self.assertEqual(r["special_terms"]["section_status"], {"base_terms": "failed", "custom_terms": "failed"})
+
+    def test_custom_section_failed_adds_check_flag(self):
+        st = dict(terms_ok(), section_status={"base_terms": "read", "custom_terms": "failed"})
+        r = full(special_terms=st)
+        self.assertIn("SPECIAL_TERMS_CHECK_NEEDED", [f["code"] for f in r["flags"]])
+        self.assertEqual(r["data_status"]["items"][2]["status"], "ok")
+
+    def test_custom_section_empty_is_not_flagged(self):
+        st = dict(terms_ok(), section_status={"base_terms": "read", "custom_terms": "empty"})
+        r = full(special_terms=st)
+        self.assertNotIn("SPECIAL_TERMS_CHECK_NEEDED", [f["code"] for f in r["flags"]])
+        self.assertEqual(r["special_terms"]["section_status"]["custom_terms"], "empty")
+
+    def test_not_provided_is_not_flagged(self):
+        r = full(special_terms=None)
+        self.assertNotIn("SPECIAL_TERMS_CHECK_NEEDED", [f["code"] for f in r["flags"]])
+
+    def test_low_confidence_label_on_price_card(self):
+        self.assertEqual(full(price=price_part(confidence="낮음"))["price_card"]["confidence_label"],
+                         "추정 시세 기준 · 신뢰도 낮음")
+        self.assertIsNone(full(price=price_part(confidence="중간"))["price_card"]["confidence_label"])
+
+    def test_registry_summary(self):
+        reg = registry_part(senior=300_000_000)
+        reg["registry_card"] = {"senior_amount_total": 300_000_000, "senior_amount_complete": False,
+                                "senior_amount_missing_count": 1,
+                                "counts": {"mortgage": 2, "jeonse_right": 1, "lease_right": 0}}
+        s = full(registry=reg)["registry_summary"]
+        self.assertEqual(s["summary_label"], "근저당 2건 · 전세권 1건")
+        self.assertEqual(s["senior_amount_missing_count"], 1)
+        self.assertEqual(s["senior_counts"], {"mortgage": 2, "hypothec": 0, "jeonse_right": 1, "lease_right": 0})
+        self.assertIsNone(full(registry=registry_part(failed=True))["registry_summary"])
 
 
 if __name__ == "__main__":

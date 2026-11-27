@@ -114,6 +114,31 @@ class ExtractTest(unittest.TestCase):
         self.assertEqual(r["base_terms"], [])
         self.assertEqual([c["text"] for c in r["custom_terms"]], ["1. 애완동물 금지", "2. 관리비는 임차인이 낸다."])
 
+    def test_section_status_read(self):
+        r = extract_special_terms(as_lines(STANDARD_LINES))
+        self.assertEqual(r["section_status"], {"base_terms": "read", "custom_terms": "read"})
+
+    def test_section_status_empty_only_when_sure(self):
+        no_custom = STANDARD_LINES[:12] + STANDARD_LINES[16:]
+        r = extract_special_terms(as_lines(no_custom))
+        self.assertEqual(r["section_status"]["custom_terms"], "empty")
+        # OCR 신뢰도가 낮으면 비어 있다고 단정하지 않는다 (OCR 실패가 "특약 없음"으로 보이지 않게)
+        r = extract_special_terms(as_lines(no_custom, score=0.5))
+        self.assertEqual(r["section_status"]["custom_terms"], "failed")
+        # ※ 기타를 못 찾아도 추출 실패
+        r = extract_special_terms(as_lines(STANDARD_LINES[:11] + STANDARD_LINES[16:]))
+        self.assertEqual(r["section_status"]["custom_terms"], "failed")
+
+    def test_section_status_base_incomplete(self):
+        lines = STANDARD_LINES[:9] + STANDARD_LINES[10:]  # ⑤ 빠짐
+        r = extract_special_terms(as_lines(lines))
+        self.assertEqual(r["section_status"]["base_terms"], "failed")
+
+    def test_section_status_non_standard(self):
+        lines = ["특약사항", "1. 애완동물 금지", "서명 또는 날인"]
+        r = extract_special_terms(as_lines(lines, page=1))
+        self.assertEqual(r["section_status"], {"base_terms": "empty", "custom_terms": "read"})
+
     def test_no_section(self):
         self.assertIsNone(extract_special_terms(as_lines(["제 1 조(목적)", "본 계약을 증명하기 위하여"])))
 
@@ -166,6 +191,7 @@ class AnalyzeTest(unittest.TestCase):
         r = analyze_contract("계약서.hwp")
         self.assertEqual((r["extraction_status"], r["reason_code"]), ("failed", "PARSE_FAILED"))
         self.assertIsNone(r["section_text"])
+        self.assertEqual(r["section_status"], {"base_terms": "failed", "custom_terms": "failed"})
 
     def test_no_section_fails(self):
         try:

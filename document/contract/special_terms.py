@@ -247,12 +247,25 @@ def extract_special_terms(lines: list[Line]) -> dict:
         warnings.append("NO_CUSTOM_TERMS")
 
     pages = sorted({ln.page for ln in lines[a - 1:b]})
+    # 구역별 상태: read(읽음) / empty(비어 있음) / failed(추출 실패). OCR 실패가 "특약 없음"으로 보이지 않게
+    # 직접 쓴 특약이 비었어도 ※ 기타를 못 찾았거나 OCR 신뢰도가 낮거나 칸 끝을 못 찾았으면 비었다고 단정하지 않는다
+    if custom_terms:
+        custom_status = "read"
+    elif marker is not None and not {"LOW_OCR_CONFIDENCE", "END_MARKER_NOT_FOUND"} & set(warnings):
+        custom_status = "empty"
+    else:
+        custom_status = "failed"
+    if base_terms:
+        base_status = "failed" if "BASE_TERMS_INCOMPLETE" in warnings else "read"
+    else:
+        base_status = "empty"
     return {
         "section_text": "\n".join(section_lines),
         "page": pages[0] if pages else None,
         "pages": pages,
         "form": "standard_2023" if is_standard else "unknown",
         "base_terms": base_terms,
+        "section_status": {"base_terms": base_status, "custom_terms": custom_status},
         "custom_marker_found": marker is not None,
         "custom_terms": custom_terms,
         "custom_terms_text": "\n".join(c["text"] for c in custom_terms) or None,

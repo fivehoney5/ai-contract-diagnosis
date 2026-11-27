@@ -5,9 +5,24 @@
   "data_status": {
     "overall": "complete",
     "items": [
-      { "part": "price", "status": "ok", "reason_code": null, "reason": null },
-      { "part": "registry", "status": "ok", "reason_code": null, "reason": null },
-      { "part": "special_terms", "status": "ok", "reason_code": null, "reason": null }
+      {
+        "part": "price",
+        "status": "ok",
+        "reason_code": null,
+        "reason": null
+      },
+      {
+        "part": "registry",
+        "status": "ok",
+        "reason_code": null,
+        "reason": null
+      },
+      {
+        "part": "special_terms",
+        "status": "ok",
+        "reason_code": null,
+        "reason": null
+      }
     ]
   },
   "property": {
@@ -25,10 +40,27 @@
     "method": "same_building_similar_area",
     "method_label": "같은 건물·비슷한 면적 거래 중앙값",
     "base_date": "2026-11-25",
-    "trade_period": { "from": "2025-11-01", "to": "2026-10-31" },
+    "trade_period": {
+      "from": "2025-11-01",
+      "to": "2026-10-31"
+    },
     "confidence": "높음",
     "jeonse_ratio": 0.6667,
-    "senior_burden_ratio": 0.7467
+    "senior_burden_ratio": 0.7467,
+    "other_tenant_deposits": null,
+    "confidence_label": null
+  },
+  "registry_summary": {
+    "senior_amount_total": 24000000,
+    "senior_amount_complete": true,
+    "senior_counts": {
+      "mortgage": 1,
+      "hypothec": 0,
+      "jeonse_right": 0,
+      "lease_right": 0
+    },
+    "senior_amount_missing_count": 0,
+    "summary_label": "근저당 1건"
   },
   "flags": [
     {
@@ -50,6 +82,10 @@
     "extraction_status": "ok",
     "masked": true,
     "page": 2,
-    "section_text": "1. 임대인은 잔금 지급일 다음 날까지 등기부상 근저당권을 말소한다.\n2. 임대인은 계약 후 잔금일까지 새로운 담보를 설정하지 않는다.\n3. 임차인 ***의 보증보험 가입이 거절되면 계약을 해제하고 계약금을 반환한다."
+    "section_text": "1. 임대인은 잔금 지급일 다음 날까지 등기부상 근저당권을 말소한다.\n2. 임대인은 계약 후 잔금일까지 새로운 담보를 설정하지 않는다.\n3. 임차인 ***의 보증보험 가입이 거절되면 계약을 해제하고 계약금을 반환한다.",
+    "section_status": {
+      "base_terms": "read",
+      "custom_terms": "read"
+    }
   }
 }

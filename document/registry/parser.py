@@ -364,6 +364,7 @@ def summarize(entries: list[Entry]) -> dict:
             "lease_right": sum(1 for e in active if e.kind == "lease_right"),
             "jeonse_right": sum(1 for e in active if e.kind == "jeonse_right"),
             "mortgage": sum(1 for e in active if e.kind == "mortgage"),
+            "hypothec": sum(1 for e in active if e.kind == "hypothec"),
             "cancelled": sum(1 for e in entries if e.status == "cancelled" and e.kind != "cancellation"),
         },
         "ownership_history": [

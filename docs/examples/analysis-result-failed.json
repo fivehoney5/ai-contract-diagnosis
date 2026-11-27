@@ -11,7 +11,12 @@
         "reason_code": "NO_TRADES",
         "reason": "신축 등으로 시세 확인 불가: 같은 건물 매매 거래가 최근 12개월 동안 없습니다."
       },
-      { "part": "registry", "status": "ok", "reason_code": null, "reason": null },
+      {
+        "part": "registry",
+        "status": "ok",
+        "reason_code": null,
+        "reason": null
+      },
       {
         "part": "special_terms",
         "status": "failed",
@@ -35,10 +40,27 @@
     "method": null,
     "method_label": null,
     "base_date": "2026-11-25",
-    "trade_period": { "from": "2025-11-01", "to": "2026-10-31" },
+    "trade_period": {
+      "from": "2025-11-01",
+      "to": "2026-10-31"
+    },
     "confidence": null,
     "jeonse_ratio": null,
-    "senior_burden_ratio": null
+    "senior_burden_ratio": null,
+    "other_tenant_deposits": null,
+    "confidence_label": null
+  },
+  "registry_summary": {
+    "senior_amount_total": 0,
+    "senior_amount_complete": true,
+    "senior_counts": {
+      "mortgage": 0,
+      "hypothec": 0,
+      "jeonse_right": 0,
+      "lease_right": 0
+    },
+    "senior_amount_missing_count": 0,
+    "summary_label": "선순위 등기 없음"
   },
   "flags": [
     {
@@ -54,12 +76,23 @@
       "value": null,
       "threshold": null,
       "source": "공공데이터 건축물대장 API에 위반건축물 항목 없음, 건축물대장 열람본 확인 필요"
+    },
+    {
+      "code": "SPECIAL_TERMS_CHECK_NEEDED",
+      "level": "확인필요",
+      "value": null,
+      "threshold": null,
+      "source": "특약 확인 필요. 계약서에서 특약 구역을 읽지 못함 (특약이 없다는 뜻이 아님). 특약 누락 여부는 판단 보류, 계약서 원본의 특약사항 칸을 직접 확인"
     }
   ],
   "special_terms": {
     "extraction_status": "failed",
     "masked": true,
     "page": null,
-    "section_text": null
+    "section_text": null,
+    "section_status": {
+      "base_terms": "failed",
+      "custom_terms": "failed"
+    }
   }
 }
