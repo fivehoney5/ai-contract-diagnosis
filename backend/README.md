@@ -59,13 +59,14 @@ uvicorn app.main:app --reload
 | `deposit` | O | 보증금(원) |
 | `area_m2` |  | 전용면적(㎡). 없으면 등기부 전용면적을 씀 |
 | `dong_nm`, `ho_nm` |  | 주소에 동·호가 없을 때 |
-| `registry_file` |  | 등기사항전부증명서 PDF |
-| `contract_files` |  | 계약서 PDF 또는 사진, 여러 장 가능 |
+| `registry_file` |  | 등기사항전부증명서 PDF, 스캔본 또는 사진. 여러 장 가능(쪽 순서대로) |
+| `contract_files` |  | 계약서 PDF 또는 사진. 여러 장 가능(쪽 순서대로) |
+
+파일은 PDF, JPG, PNG, WEBP만 받습니다. 아이폰 HEIC 사진은 OCR 모듈이 열지 못해서 415로 거절하고 JPG로 바꿔 올리라고 안내합니다. 사진·스캔본은 RapidOCR로 읽고, 처음 실행할 때 모델(약 20MB)을 내려받습니다.
 
 처리 순서는 주소 → 등기부 → 시세(등기부의 선순위 금액과 전용면적 사용) → 특약 → 위험 등급입니다. 빠진 입력이나 실패한 단계는 결과의 `data_status`에 남고, 왜 건너뛰었는지는 응답의 `notes`에 적습니다.
 
 - 원본 파일은 저장하지 않고, 입력 요약과 결과만 `backend/var/analyses.db`(SQLite)에 저장합니다. DB가 정해지면 `analysis_store.py`만 바꿉니다.
-- 특약 모듈(`document/contract`)이 아직 없으면 계약서는 읽지 않고 `notes`에 안내합니다.
 - 주소는 `JUSO_API_KEY`, 시세는 국토교통부 실거래가·건축물대장 API를 활용신청한 `PUBLIC_DATA_API_KEY`가 있어야 합니다. 없으면 해당 부분이 `API_UNAVAILABLE`로 실패하고 등급은 `판단보류`가 됩니다.
 
 ## 외부 API 키 등록

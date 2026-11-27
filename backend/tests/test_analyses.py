@@ -21,6 +21,7 @@ class Calls:
         self.price_kwargs = None
         self.result_kwargs = None
         self.contract_arg = None
+        self.registry_arg = None
 
 
 def fake_engine(calls: Calls, *, address=ADDRESS_OK, with_contract=True) -> AnalysisEngine:
@@ -45,7 +46,7 @@ def fake_engine(calls: Calls, *, address=ADDRESS_OK, with_contract=True) -> Anal
         resolve_address=lambda text, **kw: address,
         to_price_args=lambda a: {"lawd_cd": "11680", "dong": "역삼동", "building": "123"},
         analyze_price=analyze_price,
-        analyze_registry=lambda pdf: REGISTRY_OK,
+        analyze_registry=lambda src: setattr(calls, "registry_arg", src) or REGISTRY_OK,
         build_analysis_result=build,
         normalize_type=normalize,
         analyze_contract=contract if with_contract else None,
@@ -54,8 +55,9 @@ def fake_engine(calls: Calls, *, address=ADDRESS_OK, with_contract=True) -> Anal
 
 def test_engine_uses_registry_area_and_senior_amount():
     calls = Calls()
-    out = fake_engine(calls).run(AnalysisInput("서울 강남구 테헤란로 152", "아파트", 300_000_000, registry_pdf=b"%PDF"), "id1")
+    out = fake_engine(calls).run(AnalysisInput("서울 강남구 테헤란로 152", "아파트", 300_000_000, registry_files=[b"%PDF"]), "id1")
 
+    assert calls.registry_arg == b"%PDF"  # 한 장이면 bytes 그대로
     assert calls.price_kwargs["area"] == 84.97
     assert calls.price_kwargs["senior_amount_used"] == 120_000_000
     assert calls.price_kwargs["deposit"] == 300_000_000
@@ -76,6 +78,12 @@ def test_engine_skips_price_without_area_or_address():
     fake_engine(calls, address=failed).run(AnalysisInput("주소", "아파트", 1, area_m2=59.0), "id3")
     assert calls.price_kwargs is None
     assert calls.result_kwargs["address"] is failed
+
+
+def test_engine_passes_registry_photos_as_list():
+    calls = Calls()
+    fake_engine(calls).run(AnalysisInput("주소", "아파트", 1, registry_files=[b"p1", b"p2"]), "id6")
+    assert calls.registry_arg == [b"p1", b"p2"]
 
 
 def test_engine_contract_pages_and_missing_module():
@@ -119,7 +127,8 @@ def test_create_then_get_analysis(client):
         "/api/analyses",
         data={"address": "서울 강남구 테헤란로 152", "property_type": "아파트", "deposit": "300000000"},
         files=[
-            ("registry_file", ("등기부.pdf", b"%PDF-1.4 fake", "application/pdf")),
+            ("registry_file", ("등기부1.jpg", b"reg1", "image/jpeg")),
+            ("registry_file", ("등기부2.png", b"reg2", "image/png")),
             ("contract_files", ("1.jpg", b"img1", "image/jpeg")),
             ("contract_files", ("2.jpg", b"img2", "image/jpeg")),
         ],
@@ -128,6 +137,8 @@ def test_create_then_get_analysis(client):
     body = response.json()
     assert body["result"]["grade"] == "주의"
     assert body["input"]["registry_uploaded"] is True
+    assert body["input"]["registry_pages"] == 2
+    assert calls.registry_arg == [b"reg1", b"reg2"]
     assert body["input"]["contract_pages"] == 2
     assert calls.contract_arg == [b"img1", b"img2"]
 
@@ -145,4 +156,8 @@ def test_create_rejects_bad_input(client):
     assert http.post("/api/analyses", data={**base, "deposit": "0"}).status_code == 422
     wrong = http.post("/api/analyses", data=base, files={"registry_file": ("a.txt", b"hi", "text/plain")})
     assert wrong.status_code == 415
+    heic = http.post("/api/analyses", data=base, files={"registry_file": ("a.heic", b"x", "image/heic")})
+    assert heic.status_code == 415 and "JPG" in heic.json()["detail"]
+    single_pdf = http.post("/api/analyses", data=base, files={"registry_file": ("a.pdf", b"%PDF", "application/pdf")})
+    assert single_pdf.status_code == 201 and single_pdf.json()["input"]["registry_pages"] == 1
     assert http.get("/api/analyses/nope").status_code == 404

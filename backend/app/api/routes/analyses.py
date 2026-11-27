@@ -16,13 +16,14 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 Engine = Annotated[AnalysisEngine, Depends(get_analysis_engine)]
 Store = Annotated[AnalysisStore, Depends(get_analysis_store)]
 
-PDF_TYPES = {"application/pdf"}
-CONTRACT_TYPES = PDF_TYPES | {"image/jpeg", "image/png", "image/heic", "image/webp"}
+# 사진은 OCR 모듈(PIL)이 열 수 있는 형식만 받습니다. HEIC는 PIL이 열지 못해 받지 않습니다.
+DOCUMENT_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
 
 
-def _read_upload(upload: UploadFile, allowed: set[str], label: str) -> bytes:
+def _read_upload(upload: UploadFile, label: str, allowed: set[str] = DOCUMENT_TYPES) -> bytes:
     if upload.content_type not in allowed:
-        raise HTTPException(415, f"{label}: 지원하지 않는 파일 형식입니다 ({upload.content_type})")
+        hint = " 아이폰 HEIC 사진은 JPG로 바꿔서 올려 주세요." if upload.content_type in {"image/heic", "image/heif"} else ""
+        raise HTTPException(415, f"{label}: 지원하지 않는 파일 형식입니다 ({upload.content_type}). PDF, JPG, PNG, WEBP만 받습니다.{hint}")
     limit = get_settings().max_upload_mb * 1024 * 1024
     data = upload.file.read(limit + 1)
     if len(data) > limit:
@@ -43,8 +44,10 @@ def create_analysis(
     area_m2: Annotated[float | None, Form(gt=0, description="전용면적(㎡). 없으면 등기부 값을 씀")] = None,
     dong_nm: Annotated[str | None, Form(description="동. 주소에 없을 때만")] = None,
     ho_nm: Annotated[str | None, Form(description="호. 주소에 없을 때만")] = None,
-    registry_file: Annotated[UploadFile | None, File(description="등기사항전부증명서 PDF")] = None,
-    contract_files: Annotated[list[UploadFile] | None, File(description="계약서 PDF 또는 사진(여러 장 가능)")] = None,
+    registry_file: Annotated[
+        list[UploadFile] | None, File(description="등기사항전부증명서 PDF, 스캔본 또는 사진(여러 장 가능, 쪽 순서대로)")
+    ] = None,
+    contract_files: Annotated[list[UploadFile] | None, File(description="계약서 PDF 또는 사진(여러 장 가능, 쪽 순서대로)")] = None,
 ) -> dict[str, Any]:
     try:
         engine.check_property_type(property_type)
@@ -58,8 +61,8 @@ def create_analysis(
         area_m2=area_m2,
         dong_nm=dong_nm or None,
         ho_nm=ho_nm or None,
-        registry_pdf=_read_upload(registry_file, PDF_TYPES, "등기부") if registry_file else None,
-        contract_files=[_read_upload(f, CONTRACT_TYPES, "계약서") for f in contract_files or []],
+        registry_files=[_read_upload(f, "등기부") for f in registry_file or []],
+        contract_files=[_read_upload(f, "계약서") for f in contract_files or []],
     )
 
     analysis_id = uuid.uuid4().hex
@@ -72,7 +75,8 @@ def create_analysis(
         "area_m2": area_m2,
         "dong_nm": data.dong_nm,
         "ho_nm": data.ho_nm,
-        "registry_uploaded": data.registry_pdf is not None,
+        "registry_uploaded": bool(data.registry_files),
+        "registry_pages": len(data.registry_files),
         "contract_pages": len(data.contract_files),
     }
     store.save(analysis_id, created_at, input_summary, output.result, output.notes)

@@ -21,7 +21,7 @@ class AnalysisInput:
     area_m2: float | None = None  # 없으면 등기부의 전용면적을 씀
     dong_nm: str | None = None
     ho_nm: str | None = None
-    registry_pdf: bytes | None = None
+    registry_files: list[bytes] = field(default_factory=list)  # PDF 하나 또는 사진 여러 장(쪽 순서대로)
     contract_files: list[bytes] = field(default_factory=list)
 
 
@@ -51,10 +51,7 @@ class AnalysisEngine:
         from document.registry import analyze_registry
         from document.risk import build_analysis_result
 
-        try:  # 특약 모듈은 아직 test에 병합 전일 수 있음
-            from document.contract import analyze_contract
-        except ImportError:
-            analyze_contract = None
+        from document.contract import analyze_contract
 
         return cls(
             resolve_address=resolve_address,
@@ -76,10 +73,10 @@ class AnalysisEngine:
         address = self.resolve_address(data.address, dong_nm=data.dong_nm, ho_nm=data.ho_nm)
 
         registry: dict | None = None
-        if data.registry_pdf:
-            registry = self.analyze_registry(data.registry_pdf)
+        if data.registry_files:
+            registry = self.analyze_registry(_one_or_list(data.registry_files))
         else:
-            notes.append("등기부 PDF가 없어 선순위 권리를 확인하지 않았습니다.")
+            notes.append("등기부가 없어 선순위 권리를 확인하지 않았습니다.")
 
         area = data.area_m2
         if area is None and registry and registry.get("data_status_item", {}).get("status") == "ok":
@@ -106,8 +103,7 @@ class AnalysisEngine:
             if self.analyze_contract is None:
                 notes.append("특약 분석 모듈이 아직 연결되지 않아 계약서는 읽지 않았습니다.")
             else:
-                files: Any = data.contract_files[0] if len(data.contract_files) == 1 else data.contract_files
-                special_terms = self.analyze_contract(files)
+                special_terms = self.analyze_contract(_one_or_list(data.contract_files))
 
         result = self.build_analysis_result(
             address=address,
@@ -117,3 +113,8 @@ class AnalysisEngine:
             analysis_id=analysis_id,
         )
         return AnalysisOutput(result=result, notes=notes)
+
+
+def _one_or_list(files: list[bytes]) -> Any:
+    """분석 모듈은 파일 하나면 그대로, 여러 장이면 쪽 순서대로 된 목록을 받습니다."""
+    return files[0] if len(files) == 1 else files
