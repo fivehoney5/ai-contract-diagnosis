@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import logging
 import os
 import sqlite3
 import threading
@@ -34,6 +35,13 @@ ENV_PATH = "PUBLIC_API_CACHE_PATH"
 OFF_VALUES = {"0", "off", "false", "no"}
 
 DAY = 86400
+# 만료 후 API가 실패할 때 저장본을 쓸 수 있는 최대 기간. 이보다 오래되면 저장본을 쓰지 않고 실패로 둔다
+MAX_STALE_SECONDS = 30 * DAY
+# 만료 후 이 기간이 지난 행은 지운다 (저장본으로도 못 쓰는 행, 사용자가 입력한 주소 검색어 포함)
+PURGE_AFTER_EXPIRY_SECONDS = MAX_STALE_SECONDS
+PURGE_INTERVAL_SECONDS = 3600  # 저장할 때 정리 작업은 이 간격에 한 번만
+
+logger = logging.getLogger(__name__)
 
 DATA_SOURCE_API = "api"  # 모두 API에서 새로 받음 (일부만 캐시여도 api)
 DATA_SOURCE_CACHE = "cache"  # 모두 만료 전 캐시에서 씀
@@ -78,6 +86,8 @@ class SQLiteApiCache:
                 " expires_at REAL NOT NULL,"
                 " PRIMARY KEY (namespace, key))"
             )
+        self._last_purge = 0.0
+        self.purge()
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -111,6 +121,20 @@ class SQLiteApiCache:
                 " VALUES (?, ?, ?, ?, ?)",
                 (namespace, key, json.dumps(value, ensure_ascii=False), now, now + ttl_seconds),
             )
+        if now - self._last_purge > PURGE_INTERVAL_SECONDS:
+            self.purge()
+
+    def purge(self, after_expiry_seconds: float = PURGE_AFTER_EXPIRY_SECONDS) -> int:
+        """만료 후 after_expiry_seconds가 지난 행을 지우고 지운 개수를 돌려준다.
+
+        저장본으로도 쓸 수 없는 행이라 남길 이유가 없다. 주소 캐시에는 사용자가 입력한 주소가 들어 있어서
+        오래 남지 않게 한다 (주소는 만료 30일 + 30일 = 저장 후 최대 60일).
+        """
+        now = time.time()
+        self._last_purge = now
+        with self._conn() as conn:
+            cur = conn.execute("DELETE FROM api_cache WHERE expires_at < ?", (now - after_expiry_seconds,))
+            return cur.rowcount
 
     def close(self) -> None:
         if self._memory is not None:
@@ -187,10 +211,12 @@ def cached_call(
     fallback_errors: tuple[type[BaseException], ...] = (Exception,),
     dump: Callable[[Any], Any] = lambda v: v,
     load: Callable[[Any], Any] = lambda v: v,
+    max_stale_seconds: float = MAX_STALE_SECONDS,
 ) -> Any:
     """캐시에 만료 전 값이 있으면 그 값, 없으면 fetch() 결과를 저장하고 돌려준다.
 
-    fetch()가 fallback_errors를 던지면 만료된 저장본이라도 있을 때 그것을 돌려주고, 없으면 그대로 던진다.
+    fetch()가 fallback_errors를 던지면 만료된 지 max_stale_seconds 안의 저장본이 있을 때 그것을 돌려주고
+    (경고 로그를 남김), 없거나 더 오래됐으면 그대로 던진다 (호출하는 쪽에서 API_UNAVAILABLE 등으로 처리).
     dump/load : 값 <-> JSON으로 저장할 모양 변환.
     """
     entry: CacheEntry | None = None
@@ -210,15 +236,20 @@ def cached_call(
 
     try:
         value = fetch()
-    except fallback_errors:
-        if entry is not None:
-            try:
-                stale = load(entry.value)
-            except (ValueError, TypeError, KeyError):
-                raise
-            _record(CacheEvent(namespace, key, DATA_SOURCE_STALE, entry.saved_at))
-            return stale
-        raise
+    except fallback_errors as e:
+        if entry is None:
+            raise
+        if time.time() - entry.expires_at > max_stale_seconds:
+            logger.warning("공공 API 실패, 저장본이 너무 오래돼 쓰지 않음 [%s] %s: %s",
+                           namespace, type(e).__name__, str(e)[:200])
+            raise
+        stale = load(entry.value)
+        # 인증키가 빠졌거나 만료된 경우도 여기로 온다. 운영 중에 모르고 지나가지 않게 경고를 남긴다
+        logger.warning("공공 API 실패로 만료된 저장본 사용 [%s] 저장 %s, %s: %s",
+                       namespace, datetime.fromtimestamp(entry.saved_at).strftime("%Y-%m-%d %H:%M"),
+                       type(e).__name__, str(e)[:200])
+        _record(CacheEvent(namespace, key, DATA_SOURCE_STALE, entry.saved_at))
+        return stale
 
     if cache is not None:
         try:

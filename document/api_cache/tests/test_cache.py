@@ -77,9 +77,9 @@ class FakeSession:
         return r
 
 
-def expire_all(cache: SQLiteApiCache):
+def expire_all(cache: SQLiteApiCache, seconds_ago: float = 1):
     with cache._conn() as conn:
-        conn.execute("UPDATE api_cache SET expires_at = 0")
+        conn.execute("UPDATE api_cache SET expires_at = ?", (time.time() - seconds_ago,))
 
 
 class StoreTests(unittest.TestCase):
@@ -153,6 +153,46 @@ class CachedCallTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.call(self.fetch_fail)
         self.assertIsNone(self.cache.get("ns", "k"))
+
+    def test_too_old_stale_not_used(self):
+        self.call(self.fetch_ok)
+        expire_all(self.cache, store.MAX_STALE_SECONDS + 60)
+        with self.assertLogs("document.api_cache.store", "WARNING") as logs, self.assertRaises(RuntimeError):
+            self.call(self.fetch_fail)
+        self.assertIn("너무 오래", logs.output[0])
+
+    def test_stale_use_is_logged(self):
+        self.call(self.fetch_ok)
+        expire_all(self.cache)
+        with self.assertLogs("document.api_cache.store", "WARNING") as logs:
+            self.call(self.fetch_fail)
+        self.assertIn("저장본 사용", logs.output[0])
+        self.assertIn("RuntimeError: down", logs.output[0])
+
+    def test_purge_removes_old_rows(self):
+        self.cache.save("juso", "old", [1], 60)
+        self.cache.save("juso", "new", [2], 60)
+        with self.cache._conn() as conn:
+            conn.execute("UPDATE api_cache SET expires_at = ? WHERE key = 'old'",
+                         (time.time() - store.PURGE_AFTER_EXPIRY_SECONDS - 60,))
+        self.assertEqual(self.cache.purge(), 1)
+        self.assertIsNone(self.cache.get("juso", "old"))
+        self.assertIsNotNone(self.cache.get("juso", "new"))
+
+    def test_purge_runs_on_open_and_save(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "c.sqlite")
+            c = SQLiteApiCache(path)
+            c.save("juso", "old", [1], 60)
+            with c._conn() as conn:
+                conn.execute("UPDATE api_cache SET expires_at = 0")
+            self.assertIsNone(SQLiteApiCache(path).get("juso", "old"))  # 열 때 정리
+            c.save("juso", "old", [1], 60)
+            with c._conn() as conn:
+                conn.execute("UPDATE api_cache SET expires_at = 0")
+            c._last_purge = 0
+            c.save("juso", "other", [2], 60)  # 저장할 때도 한 시간에 한 번 정리
+            self.assertIsNone(c.get("juso", "old"))
 
     def test_other_errors_not_covered(self):
         self.call(self.fetch_ok)
@@ -264,6 +304,15 @@ class AnalyzePriceDataSourceTests(unittest.TestCase):
         self.assertEqual((item["status"], item["data_source"]), ("ok", DATA_SOURCE_STALE))
         self.assertIn("저장해 둔 데이터", item["reason"])
         self.assertEqual(r3["price_card"]["estimated_price"], r1["price_card"]["estimated_price"])
+
+    def test_too_old_stale_fails_as_api_unavailable(self):
+        cache = SQLiteApiCache(":memory:")
+        self.run_price(cache, FakeSession(FakeResp(rtms_xml(3))))
+        expire_all(cache, store.MAX_STALE_SECONDS + 60)
+        with self.assertLogs("document.api_cache.store", "WARNING"):
+            r = self.run_price(cache, FakeSession(requests.ConnectionError("x")))
+        self.assertEqual((r["data_status_item"]["status"], r["data_status_item"]["reason_code"]),
+                         ("failed", "API_UNAVAILABLE"))
 
     def test_no_cache_failure_keeps_api_unavailable(self):
         r = self.run_price(None, FakeSession(requests.ConnectionError("x")))
