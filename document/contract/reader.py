@@ -93,6 +93,7 @@ def rapidocr_engine():
             items = ocr(np.asarray(image))
         return items
 
+    run.raw = ocr  # 기울기 보정 없이 한 번만 읽기 (등기부 모듈이 보정한 그림을 직접 쓰려고 씀)
     return run
 
 

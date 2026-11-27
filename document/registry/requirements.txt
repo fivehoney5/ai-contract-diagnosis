@@ -1,3 +1,7 @@
 pdfplumber>=0.11
+# 스캔본·사진 OCR (계약서 모듈과 같은 RapidOCR 한국어 PP-OCRv5 모델, 처음 실행 때 약 20MB 내려받음)
+pillow>=10
+rapidocr>=3.4
+onnxruntime>=1.20
 # 테스트에서 가상 등기부 PDF를 만들 때만 필요
 reportlab>=4.0
