@@ -25,6 +25,8 @@ CUSTOM_MARKER = re.compile(r"^[※*＊·.\-]?\s*기타(?![가-힣])")
 # 기본특약 번호
 CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"
 CIRCLED_RE = re.compile(rf"^\s*([{CIRCLED}])\s*")
+# 원문자를 숫자로 읽은 기본특약 번호 ("2임대인이"). 직접 쓴 특약 "1."과 달리 마침표 없이 한글이 바로 붙는다
+OCR_DIGIT_NO_RE = re.compile(r"^([1-6])\s?(?=[가-힣])")
 # 직접 쓴 특약 번호: "1.", "1)", "(1)", "가." 등
 CUSTOM_NO_RE = re.compile(r"^\s*(?:\(?(\d{1,2})[.)]|-|•|·)\s*")
 # 쪽 번호 "- 2 / 4 -"
@@ -125,6 +127,14 @@ def split_base_terms(lines: list[Line]) -> list[dict]:
     for ln in lines:
         t = ln.text.strip()
         no = _base_no(t)
+        m = OCR_DIGIT_NO_RE.match(t)
+        if no is None and m:
+            # 사진 OCR이 ②·③을 "2임대인이…"처럼 숫자로 읽는 경우. 다음 차례 번호일 때만 원문자로 본다
+            expected = (items[-1]["no"] or 0) + 1 if items else 1
+            if int(m.group(1)) == expected:
+                no, t = expected, t[m.end():]
+        elif no is not None and m and int(m.group(1)) == no:  # 낱말로 번호를 찾았어도 앞 숫자는 뗀다
+            t = t[m.end():]
         if no is not None and (not items or no != items[-1]["no"]):
             items.append({"no": no, "lines": [CIRCLED_RE.sub("", t)], "notes": []})
         elif items:

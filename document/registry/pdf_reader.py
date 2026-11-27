@@ -5,7 +5,7 @@
 글자 높이의 가운데 부분을 지나가는 가로선을 취소선으로 본다.
 표 테두리는 글자의 위나 아래에 있어서 가운데를 지나지 않으므로 취소선으로 잡히지 않는다.
 
-스캔 이미지 PDF(글자 층 없음)는 NoTextLayerError를 낸다. OCR 연동은 아직 하지 않는다.
+스캔 이미지 PDF(글자 층 없음)는 NoTextLayerError를 낸다. 이때는 ocr_reader.py가 그림으로 바꿔 OCR로 읽는다.
 """
 
 from __future__ import annotations

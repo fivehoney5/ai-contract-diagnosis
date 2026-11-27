@@ -90,6 +90,14 @@ class ExtractTest(unittest.TestCase):
         r = extract_special_terms(as_lines(lines))
         self.assertEqual([t["no"] for t in r["base_terms"]], [1, 2, 3, 4, 5, 6])
 
+    def test_circled_numbers_read_as_digits(self):
+        # 실제 폰 사진: ②·③을 "2임대인이…", "3임대차계약을…"처럼 숫자로 읽음
+        lines = [re.sub(r"^②\s*", "2", re.sub(r"^③\s*", "3", t)) for t in STANDARD_LINES]
+        r = extract_special_terms(as_lines(lines))
+        self.assertEqual([t["no"] for t in r["base_terms"]], [1, 2, 3, 4, 5, 6])
+        self.assertFalse(any(t["text"][:1].isdigit() for t in r["base_terms"][1:3]))
+        self.assertEqual(r["section_status"]["base_terms"], "read")
+
     def test_no_custom_terms(self):
         lines = STANDARD_LINES[:12] + STANDARD_LINES[16:]
         r = extract_special_terms(as_lines(lines))

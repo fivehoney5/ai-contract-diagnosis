@@ -1,6 +1,6 @@
 # 등기부 권리정보 추출
 
-인터넷등기소에서 발급한 등기사항전부증명서(집합건물) PDF에서 표제부·갑구·을구를 읽고, 말소된 등기를 가려낸 뒤 선순위 금액과 위험 신호를 만듭니다. 결과는 [분석 결과 형식 초안](../../docs/analysis-result.md)의 조각이고, 신호 규칙은 [리스크 규칙표](../../docs/risk-rules.md)를 따릅니다.
+인터넷등기소에서 발급한 등기사항전부증명서(집합건물) PDF, 또는 그 스캔본·사진에서 표제부·갑구·을구를 읽고, 말소된 등기를 가려낸 뒤 선순위 금액과 위험 신호를 만듭니다. 결과는 [분석 결과 형식 초안](../../docs/analysis-result.md)의 조각이고, 신호 규칙은 [리스크 규칙표](../../docs/risk-rules.md)를 따릅니다.
 
 ## 설치와 실행
 
@@ -10,6 +10,7 @@ python -m unittest discover -s document/registry/tests -v   # 저장소 루트�
 ```
 
 - `reportlab`은 테스트에서 가상 등기부 PDF를 만들 때만 씁니다.
+- `rapidocr`·`onnxruntime`·`pillow`는 스캔본·사진을 읽을 때만 씁니다. 없으면 글자 층 PDF만 읽고 스캔본·사진은 `PARSE_FAILED`입니다. 실제 OCR 테스트는 쪽마다 몇 초 걸리고, 라이브러리가 없으면 건너뜁니다.
 - PDF 테스트는 한글 TTF 글꼴이 필요합니다. Windows는 맑은 고딕을 자동으로 찾고, 다른 환경은 `KOREAN_TTF` 환경변수에 글꼴 경로를 넣습니다. 글꼴이나 라이브러리가 없으면 PDF 테스트만 건너뜁니다.
 - 테스트는 모두 지어낸 데이터입니다. 실제 등기부 PDF는 저장소에 올리지 않습니다(.gitignore가 `*.pdf`를 막음).
 
@@ -20,6 +21,7 @@ from document.registry import analyze_registry
 from document.price import analyze_price
 
 reg = analyze_registry("등기부.pdf")          # 경로, bytes, 파일 객체 모두 가능
+reg = analyze_registry(["1쪽.jpg", "2쪽.jpg"]) # 사진 여러 장은 쪽 순서대로 목록으로
 price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 ```
 
@@ -27,8 +29,10 @@ price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 
 | 상황 | reason_code | reason 예 |
 | --- | --- | --- |
-| 글자 층이 없는 스캔 PDF | `PARSE_FAILED` | "글자 층이 없습니다 (스캔 이미지로 보임). OCR 연동 전이라 읽지 못합니다" |
-| PDF가 아니거나 손상·암호화 | `PARSE_FAILED` | "PDF를 열 수 없습니다" |
+| 스캔본·사진인데 OCR 엔진이 없음 | `PARSE_FAILED` | "OCR 엔진(rapidocr)이 설치되어 있지 않아 읽지 못합니다" |
+| OCR 평균 신뢰도가 0.85 미만 | `PARSE_FAILED` | "글자를 충분히 읽지 못했습니다 (OCR 신뢰도 0.62)" |
+| OCR로 구 제목, 갑구·을구 구분, 순위번호를 놓침 | `PARSE_FAILED` | "표 위의 구 제목을 읽지 못했습니다", "순위번호 일부를 읽지 못했습니다 (빠진 행이 있을 수 있음)" |
+| PDF·사진이 아니거나 손상·암호화 | `PARSE_FAILED` | "PDF를 열 수 없습니다", "PDF나 사진 파일로 열 수 없습니다" |
 | 등기부 표(표제부·갑구·을구)가 없음 | `PARSE_FAILED` | "등기부 표를 찾지 못했습니다" |
 
 ## 결과
@@ -38,7 +42,7 @@ price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 | `data_status_item` | `part: "registry"` 상태 |
 | `property` | 표시용 주소(쪽 머리의 `[집합건물]` 줄), 도로명주소, 호수, 전유 면적(㎡), 구조 |
 | `senior_amount_used` | 선순위 합계(원). 시세 모듈 `analyze_price(senior_amount_used=...)`에 넣으면 `senior_burden_ratio`가 계산됨. 금액을 못 읽은 선순위 등기가 하나라도 있으면 `None`(부담률을 낮게 계산하지 않도록 판단보류) |
-| `registry_card` | 선순위 내역, 권리 종류별 건수(`counts`, 저당권 `hypothec` 포함), 금액을 못 읽은 선순위 건수(`senior_amount_missing_count`), 소유권 이력(이름 마스킹), 가장 빠른 담보물권 접수일, 열람일 |
+| `registry_card` | 선순위 내역, 권리 종류별 건수(`counts`, 저당권 `hypothec` 포함), 금액을 못 읽은 선순위 건수(`senior_amount_missing_count`), 소유권 이력(이름 마스킹), 가장 빠른 담보물권 접수일, 열람일, 읽은 방법(`read_method`: `text_layer` 또는 `ocr`)과 OCR 평균 신뢰도(`ocr_score`) |
 | `flags` | 등기부 신호 (아래 표) |
 | `detail.entries` | 갑구·을구 항목 전체. 순위번호, 종류, 금액, `status`(active/cancelled), `cancel_basis` |
 
@@ -77,9 +81,26 @@ price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 - 권리자 칸 원문은 결과에 넣지 않습니다. 대표 권리자 이름만 남기고, 개인은 `***`, 법인·기관(은행, 주식회사, 공단 등)은 이름을 그대로 둡니다.
 - 주민등록번호와 주소는 결과에 남기지 않습니다.
 
+## 스캔본·사진 (OCR)
+
+글자 층이 없는 PDF와 사진(jpg, png 등)은 `ocr_reader.py`가 계약서 모듈과 같은 RapidOCR 엔진(방향 분류기 끔, 기울기 보정)으로 읽어 같은 표 행으로 바꿉니다. 그 뒤 말소 판정·선순위·신호·마스킹은 글자 층 PDF와 똑같은 규칙입니다. `registry_card.read_method`가 `"ocr"`이고 `ocr_score`(평균 신뢰도 0-1)가 붙습니다. 글자 층 PDF는 `"text_layer"`, `null`입니다.
+
+- 칸 나누기: 머리글 줄(순위번호·등기목적·접수·등기원인·권리자) 글자 위치로 칸 경계를 잡습니다. 두 칸에 걸쳐 읽힌 글자는 공백이나 한글·숫자 경계에서 자릅니다.
+- 행 나누기: 표 가로 테두리가 보이면 테두리 사이를 한 행으로, 안 보이면 순위번호 줄을 기준으로 묶습니다.
+- 취소선: 그림에서 글자 높이 25-80% 사이를 상자 폭 70% 이상 지나는 가로선(검은색·빨간색)을 찾습니다. 단, OCR에서는 **"N번…말소" 등기 행이 있어야만 말소**로 봅니다. 사진은 기울기·그림자·테두리 때문에 선을 잘못 잡을 수 있고, 살아 있는 근저당을 말소로 보면 선순위 합계가 줄어 위험한 집이 안전하게 나오기 때문입니다. 취소선만 있고 말소 등기가 없으면 살아 있는 것으로 계산하고 `cancel_basis`에 `strike_unconfirmed`, 신호 `STRIKE_WITHOUT_CANCEL_ENTRY`(확인필요)를 냅니다.
+- 금액: 금액이 든 글자의 OCR 점수가 0.90 미만이면 금액을 버려 "금액 미확인"(`SENIOR_AMOUNT_UNREADABLE`)이 됩니다. 잘못 읽은 금액으로 선순위 합계를 내지 않기 위해서입니다.
+- 안전장치: 구 제목 없이 표 머리글이 먼저 나오거나(제목을 못 읽음), 같은 구에 같은 순위번호가 두 번 나오거나(갑구·을구 제목을 놓침), 순위번호가 1부터 이어지지 않으면(행을 놓침) 권리가 섞이거나 빠질 수 있으므로 `PARSE_FAILED`로 돌려줍니다. 구 제목은 【가 잘리거나 점·1로 읽혀도 앞 2글자까지는 인정합니다.
+- 취소선 글자에서 자주 틀리는 글자(근저당귀→근저당권, 말쇠→말소 등)와 잃어버린 띄어쓰기 일부(소유자홍길동→소유자 홍길동)를 고칩니다.
+
+확인 결과 (2026-11-27, 가상 등기부만 사용): 데모용 가상 등기부 3개와 테스트용 가상 등기부를 2도 기울이고 흐림·노이즈를 넣어 사진(jpg)과 스캔 PDF로 만들었더니, 8건 모두 살아 있는 권리·선순위 금액·말소 건수·신호가 글자 층 PDF 결과와 같았습니다. 3도 기울기에 노이즈를 더 세게 넣은 4건은 3건이 `PARSE_FAILED`(순위번호 누락)로 판단보류, 1건은 정상이었습니다. 쪽당 약 8초 걸립니다 (노트북 CPU).
+
+한계: OCR은 주소 띄어쓰기를 자주 잃습니다(`address_display`가 "노원구상계동720…"처럼 나올 수 있음). 위험 등급 모듈의 주소 비교(`risk/address_match.py`)는 띄어쓰기 없이도 지번을 찾습니다.
+
+실제 폰 사진 확인 (2026-11-27, 모니터에 띄운 가상 등기부 "위험" 갑구·을구): 갑구 3건(가압류 포함), 을구 1번 말소(취소선과 2번 말소 등기), 3번 근저당 2.4억, `OWNERSHIP_RESTRICTED`가 PDF와 같았습니다. 표제부·쪽 머리가 사진에 없어 `HIDDEN_SENIOR_CLAIM_CHECK_NEEDED`가 추가로 나옵니다. 시험용 사진은 `tests/fake_photo.py 가상등기부.pdf 출력폴더`로 만들 수 있습니다.
+
 ## 아직 안 한 것
 
-- 스캔 PDF OCR (지금은 `PARSE_FAILED`).
+- 실제 등기부 스캔본·휴대폰 사진으로 OCR 확인, `OCR_MIN_SCORE`(0.85)와 금액 점수 기준(0.90) 팀 합의.
 - 소유자·임대인 일치(`OWNER_MISMATCH`): 계약서 임대인란과 메모리에서만 비교하는 함수가 필요합니다.
 - 최우선변제(`PRIORITY_REPAYMENT_INFO`): `earliest_security_date`는 내보내지만 지역·기간별 금액 표가 아직 없습니다.
 - 집합건물 실제 등기부로 확인 (지금까지는 일반건물 실제 등기부 1건과 가상 집합건물 PDF로 확인).
