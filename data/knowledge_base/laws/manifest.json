@@ -1,0 +1,65 @@
+{
+  "source": "국가법령정보 공동활용 Open API (https://open.law.go.kr)",
+  "license": "법령은 저작권법 제7조에 따라 보호 대상이 아닌 저작물",
+  "laws": [
+    {
+      "law_name": "공인중개사법",
+      "law_id": "001654",
+      "file": "공인중개사법.jsonl",
+      "articles": 69,
+      "article_range": null,
+      "effective_date": "2026-08-28",
+      "reason": "중개대상물 확인·설명 의무, 중개사 책임",
+      "collected_at": "2026-11-27T14:24:27+09:00"
+    },
+    {
+      "law_name": "민법",
+      "law_id": "001706",
+      "file": "민법.jsonl",
+      "articles": 54,
+      "article_range": [
+        [
+          303,
+          319
+        ],
+        [
+          618,
+          654
+        ]
+      ],
+      "effective_date": "2026-03-17",
+      "reason": "전세권(제303-319조)과 임대차(제618-654조) 일반 규정",
+      "collected_at": "2026-11-27T14:24:27+09:00"
+    },
+    {
+      "law_name": "전세사기피해자 지원 및 주거안정에 관한 특별법",
+      "law_id": "014450",
+      "file": "전세사기피해자_지원_및_주거안정에_관한_특별법.jsonl",
+      "articles": 53,
+      "article_range": null,
+      "effective_date": "2026-05-12",
+      "reason": "전세사기 피해자 요건과 지원 절차",
+      "collected_at": "2026-11-27T14:24:27+09:00"
+    },
+    {
+      "law_name": "주택임대차보호법",
+      "law_id": "001248",
+      "file": "주택임대차보호법.jsonl",
+      "articles": 41,
+      "article_range": null,
+      "effective_date": "2026-01-02",
+      "reason": "대항력, 우선변제, 임대차기간, 계약갱신, 임대인 정보 제시 의무",
+      "collected_at": "2026-11-27T14:24:27+09:00"
+    },
+    {
+      "law_name": "주택임대차보호법 시행령",
+      "law_id": "004950",
+      "file": "주택임대차보호법_시행령.jsonl",
+      "articles": 35,
+      "article_range": null,
+      "effective_date": "2026-07-01",
+      "reason": "최우선변제 소액임차인 범위와 금액, 확정일자 정보 제공",
+      "collected_at": "2026-11-27T14:24:27+09:00"
+    }
+  ]
+}
