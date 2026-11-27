@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 저장소 루트의 .env를 읽습니다 (backend/app/core/config.py 기준 세 단계 위).
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -29,6 +30,10 @@ class Settings(BaseSettings):
     public_data_base_url: str = "https://apis.data.go.kr"
 
     external_api_timeout: float = 10.0
+
+    # 분석 결과 저장 (backend/var/는 .gitignore의 var/에 포함)
+    database_path: str = str(BACKEND_DIR / "var" / "analyses.db")
+    max_upload_mb: int = 20
 
 
 @lru_cache
