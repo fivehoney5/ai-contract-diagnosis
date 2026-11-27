@@ -1,0 +1,7 @@
+pdfplumber>=0.11
+pillow>=10
+# 사진·스캔 PDF OCR (PaddleOCR 한국어 PP-OCRv5 모델을 onnxruntime으로 실행, 처음 실행 때 모델 약 20MB 내려받음)
+rapidocr>=3.4
+onnxruntime>=1.20
+# 테스트에서 가상 계약서 PDF를 만들 때만 필요
+reportlab>=4.0

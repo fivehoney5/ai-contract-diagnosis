@@ -64,7 +64,7 @@ def registry_flags(summary: dict, title: dict, *, is_collective: bool, issued: d
                            f"{SRC} 표제부 (집합건물인데 대지권 표시 없음 또는 \"별도등기 있음\" 문구), HUG 등기부 확인 안내"))
     if not is_collective:
         flags.append(_flag("HIDDEN_SENIOR_CLAIM_CHECK_NEEDED", LEVEL_CHECK, None, None,
-                           f"{SRC} 표제부 (집합건물이 아님: 다가구 등은 다른 세입자 보증금이 등기부에 나오지 않아 "
+                           f"다른 세대의 선순위 보증금 확인 필요. {SRC} 표제부 (집합건물이 아님: 다가구 등은 다른 세입자 보증금이 등기부에 나오지 않아 "
                            "선순위 합계가 실제보다 적을 수 있음. 확정일자 부여현황·전입세대로 선순위 보증금 확인), "
                            "체크리스트 1쪽 (안내서 p.25-26)"))
     if issued is not None and today is not None:
@@ -139,6 +139,7 @@ def analyze_registry(source, *, today: date | None = None, max_age_days: int = R
         "registry_card": {
             "senior_amount_total": summary["senior_amount_total"],
             "senior_amount_complete": not summary["senior_amount_missing_ranks"],
+            "senior_amount_missing_count": len(summary["senior_amount_missing_ranks"]),
             "senior_breakdown": summary["senior_breakdown"],
             "counts": summary["counts"],
             "earliest_security_date": summary["earliest_security_date"],

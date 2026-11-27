@@ -67,7 +67,9 @@ class OkExampleTests(unittest.TestCase):
         self.r = run(OK_TRADES, senior_amount_used=24_000_000)
 
     def test_same_keys_as_example(self):
-        self.assertEqual(set(self.r["price_card"]), set(OK_EXAMPLE["price_card"]))
+        # other_tenant_deposits, confidence_label은 위험 등급 모듈(document/risk)이 붙이는 칸
+        self.assertEqual(set(self.r["price_card"]),
+                         set(OK_EXAMPLE["price_card"]) - {"other_tenant_deposits", "confidence_label"})
         self.assertEqual(set(self.r["data_status_item"]), set(OK_EXAMPLE["data_status"]["items"][0]))
         for flag in self.r["flags"]:
             self.assertEqual(set(flag), set(OK_EXAMPLE["flags"][0]))
@@ -114,7 +116,9 @@ class FailedExampleTests(unittest.TestCase):
             self.assertEqual(card[key], ex[key], key)
 
     def test_flags_match_example(self):
-        self.assertEqual(self.r["flags"], FAILED_EXAMPLE["flags"])
+        # SPECIAL_TERMS_CHECK_NEEDED는 위험 등급 모듈이 특약 추출 실패로 붙이는 신호
+        price_flags = [f for f in FAILED_EXAMPLE["flags"] if f["code"] != "SPECIAL_TERMS_CHECK_NEEDED"]
+        self.assertEqual(self.r["flags"], price_flags)
         self.assertEqual(self.r["property"]["address_key"], "1150010300-0456-0007")
         self.assertEqual(self.r["property"]["build_year"], 2025)
 

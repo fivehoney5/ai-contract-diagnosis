@@ -38,7 +38,7 @@ price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 | `data_status_item` | `part: "registry"` 상태 |
 | `property` | 표시용 주소(쪽 머리의 `[집합건물]` 줄), 도로명주소, 호수, 전유 면적(㎡), 구조 |
 | `senior_amount_used` | 선순위 합계(원). 시세 모듈 `analyze_price(senior_amount_used=...)`에 넣으면 `senior_burden_ratio`가 계산됨. 금액을 못 읽은 선순위 등기가 하나라도 있으면 `None`(부담률을 낮게 계산하지 않도록 판단보류) |
-| `registry_card` | 선순위 내역, 권리 종류별 건수, 소유권 이력(이름 마스킹), 가장 빠른 담보물권 접수일, 열람일 |
+| `registry_card` | 선순위 내역, 권리 종류별 건수(`counts`, 저당권 `hypothec` 포함), 금액을 못 읽은 선순위 건수(`senior_amount_missing_count`), 소유권 이력(이름 마스킹), 가장 빠른 담보물권 접수일, 열람일 |
 | `flags` | 등기부 신호 (아래 표) |
 | `detail.entries` | 갑구·을구 항목 전체. 순위번호, 종류, 금액, `status`(active/cancelled), `cancel_basis` |
 
@@ -66,7 +66,7 @@ price = analyze_price(..., senior_amount_used=reg["senior_amount_used"])
 | `LEASE_RIGHT_REGISTERED` | 위험 | 건수 / 1 | 말소되지 않은 주택임차권등기 |
 | `JEONSE_RIGHT_EXISTS` | 주의 | 건수 / 1 | 말소되지 않은 전세권 |
 | `LAND_RIGHT_CHECK_NEEDED` | 확인필요 | - | 집합건물인데 대지권 표시 없음, 또는 "별도등기 있음" |
-| `HIDDEN_SENIOR_CLAIM_CHECK_NEEDED` | 확인필요 | - | 집합건물이 아님(다가구 등). 다른 세입자 보증금이 등기부에 없으므로 확정일자 부여현황·전입세대 확인 안내 |
+| `HIDDEN_SENIOR_CLAIM_CHECK_NEEDED` | 확인필요 | - | 집합건물이 아님(다가구 등). "다른 세대의 선순위 보증금 확인 필요". 확정일자 부여현황·전입세대 확인 안내. 금액을 모르면 등급은 판단보류 (위험 등급 모듈) |
 | `REGISTRY_OUTDATED` | 주의 `[초안]` | 경과 일수 / 7 | 열람일이 분석일보다 7일 이상 전 (`max_age_days`) |
 | `SENIOR_AMOUNT_UNREADABLE` (신규) | 확인필요 | 건수 / 1 | 살아 있는 근저당권·전세권·임차권인데 금액을 못 읽음. 선순위 합계가 실제보다 적을 수 있음 |
 
