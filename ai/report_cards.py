@@ -2,7 +2,13 @@
 import json
 import sys
 
-from .registry_evidence import load_registry_guides, search_registry_guides
+from .registry_evidence import (
+    load_registry_guides,
+    load_trust_guides,
+    search_registry_guides,
+    search_restriction_guides,
+    search_trust_guides,
+)
 
 
 def build_senior_burden_card(flag, price_card):
@@ -51,7 +57,21 @@ def build_registry_card(flag, evidence):
     }
 
 
-def build_report(analysis, *, registry_guides=None):
+def build_trust_card(flag, evidence):
+    description = "분석한 등기부에서 신탁등기가 확인됐어요."
+    if evidence:
+        description += f" {evidence[0]['summary']}"
+    return {
+        "code": flag["code"],
+        "level": flag["level"],
+        "title": "신탁등기 확인",
+        "description": description,
+        "actions": ["신탁원부를 확인하고 계약 상대방의 임대 권한과 신탁회사 동의 여부를 확인해 주세요."],
+        "evidence": evidence,
+    }
+
+
+def build_report(analysis, *, registry_guides=None, trust_guides=None):
     cards = []
     seen = set()
     for flag in analysis.get("flags", []):
@@ -64,6 +84,19 @@ def build_report(analysis, *, registry_guides=None):
         elif code == "REGISTRY_OUTDATED":
             guides = load_registry_guides() if registry_guides is None else registry_guides
             cards.append(build_registry_card(flag, search_registry_guides(guides)))
+        elif code == "OWNERSHIP_RESTRICTED":
+            evidence = search_restriction_guides()
+            cards.append({
+                "code": code,
+                "level": flag["level"],
+                "title": "소유권 제한 등기 확인",
+                "description": "분석한 등기부에서 소유권을 제한하는 등기 항목이 확인됐어요.",
+                "actions": ["최신 등기부 갑구에서 해당 등기의 종류와 현재 상태를 확인해 주세요."],
+                "evidence": evidence,
+            })
+        elif code == "TRUST_REGISTERED":
+            guides = load_trust_guides() if trust_guides is None else trust_guides
+            cards.append(build_trust_card(flag, search_trust_guides(guides)))
         elif code == "SPECIAL_TERMS_CHECK_NEEDED":
             cards.append({
                 "code": flag["code"],
