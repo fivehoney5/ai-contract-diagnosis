@@ -8,23 +8,9 @@
       "title": "특약 확인 필요",
       "description": "계약서의 특약 중 읽지 못한 부분이 있어 내용을 확인할 수 없었어요.",
       "actions": [
-        "계약서 원본에서 읽지 못한 특약을 확인해 주세요.",
-        "잔금 송금 직전에 등기부를 다시 확인해 주세요."
+        "계약서 원본에서 읽지 못한 특약을 확인해 주세요."
       ],
-      "evidence": [
-        {
-          "id": "qna:6309",
-          "title": "신혼집 계약 시 유의해야 할 사항이 무엇인가요?",
-          "url": "https://www.easylaw.go.kr/CSP/csp1/lifeLawDetail/getOnhunqueDetail.do?onhunqnaAstSeq=25&onhunqueSeq=6309",
-          "summary": "☞ 중도금, 잔금 등 대금 지급 시 대금 지급에 대한 내용이 기재된 영수증을 주고받아야 하며, 대금 지급 기일 직전에는 등기사항전부증명서를 다시 한 번 발급받아 계약 당시의 등기부상 권리관계 상태와 변함이 없는지 확인해야 합니다."
-        },
-        {
-          "id": "guide:hug:registry-recheck",
-          "title": "HUG 전세사기예방센터 · 등기부등본 확인",
-          "url": "https://www.khug.or.kr/jeonse/web/s03/s030105.jsp",
-          "summary": "HUG는 계약 전과 잔금 지급 직전에 등기부를 다시 확인하도록 안내합니다."
-        }
-      ]
+      "evidence": []
     }
   ]
 }
