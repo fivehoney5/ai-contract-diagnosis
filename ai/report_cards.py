@@ -2,6 +2,8 @@
 import json
 import sys
 
+from .registry_evidence import load_registry_guides, search_registry_guides
+
 
 def build_senior_burden_card(flag, price_card):
     ratio = price_card.get("senior_burden_ratio")
@@ -30,7 +32,26 @@ def build_senior_burden_card(flag, price_card):
     }
 
 
-def build_report(analysis):
+def build_registry_card(flag, evidence):
+    age = flag.get("value")
+    description = "분석에 사용한 등기부의 발급·열람일이 서비스 기준보다 오래됐어요."
+    if isinstance(age, int) and age >= 0:
+        description = f"분석에 사용한 등기부의 발급·열람일은 {age}일 전이에요."
+    actions = ["최신 등기부를 준비해 다시 확인해 주세요."]
+    if evidence:
+        actions.append("잔금 지급 직전에 등기부의 권리관계를 다시 확인해 주세요.")
+        description += f" {evidence[0]['summary']}"
+    return {
+        "code": flag["code"],
+        "level": flag["level"],
+        "title": "등기부 재확인",
+        "description": description,
+        "actions": actions,
+        "evidence": evidence,
+    }
+
+
+def build_report(analysis, *, registry_guides=None):
     cards = []
     seen = set()
     for flag in analysis.get("flags", []):
@@ -40,6 +61,9 @@ def build_report(analysis):
         seen.add(code)
         if code == "SENIOR_BURDEN_HIGH":
             cards.append(build_senior_burden_card(flag, analysis.get("price_card") or {}))
+        elif code == "REGISTRY_OUTDATED":
+            guides = load_registry_guides() if registry_guides is None else registry_guides
+            cards.append(build_registry_card(flag, search_registry_guides(guides)))
         elif code == "SPECIAL_TERMS_CHECK_NEEDED":
             cards.append({
                 "code": flag["code"],
