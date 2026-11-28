@@ -14,3 +14,7 @@ Get-Content -Raw -Encoding UTF8 docs/examples/analysis-result-failed.json | pyth
 
 서버에서는 `build_report(analysis)["report_cards"]`를 분석 결과에 추가할 수 있습니다.
 [가상 응답 예시](examples/first-report-example.json)를 참고하세요.
+
+## 서버 연동
+
+분석 결과 저장 전에 두 카드가 `result.report_cards`에 추가됩니다. 이전 결과에서 필드가 없으면 빈 목록으로 표시합니다.

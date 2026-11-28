@@ -161,3 +161,25 @@ def test_create_rejects_bad_input(client):
     single_pdf = http.post("/api/analyses", data=base, files={"registry_file": ("a.pdf", b"%PDF", "application/pdf")})
     assert single_pdf.status_code == 201 and single_pdf.json()["input"]["registry_pages"] == 1
     assert http.get("/api/analyses/nope").status_code == 404
+
+def test_engine_adds_report_before_persistence():
+    from ai.report_cards import enrich_analysis_result
+
+    def build(**kwargs):
+        return {
+            "analysis_id": kwargs["analysis_id"],
+            "grade": "주의",
+            "flags": [{"code": "SENIOR_BURDEN_HIGH", "level": "주의", "value": 0.7467}],
+            "price_card": {"deposit": 200_000_000, "senior_amount_used": 24_000_000,
+                           "estimated_price": 300_000_000, "senior_burden_ratio": 0.7467},
+        }
+
+    engine = replace(fake_engine(Calls()), build_analysis_result=build, enrich_report=enrich_analysis_result)
+    result = engine.run(AnalysisInput("가상 주소", "아파트", 200_000_000), "sample-card").result
+    store = AnalysisStore(":memory:")
+    store.save("sample-card", "2026-11-26T14:00:00+09:00", {}, result, [])
+    saved = store.get("sample-card")
+    assert saved["result"] == result
+    assert result["grade"] == "주의"
+    assert result["report_cards"][0]["code"] == "SENIOR_BURDEN_HIGH"
+    assert "74.67%" in result["report_cards"][0]["description"]
