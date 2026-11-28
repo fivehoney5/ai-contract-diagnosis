@@ -40,11 +40,13 @@ class AnalysisEngine:
     build_analysis_result: Callable[..., dict]
     normalize_type: Callable[[str], str]
     analyze_contract: Callable[..., dict]
+    enrich_report: Callable[[dict], dict] | None = None
 
     @classmethod
     def from_document_modules(cls) -> "AnalysisEngine":
         if str(REPO_ROOT) not in sys.path:
             sys.path.insert(0, str(REPO_ROOT))
+        from ai.report_cards import enrich_analysis_result
         from document.address import resolve_address, to_price_args
         from document.price import analyze_price
         from document.price.rtms_client import normalize_type
@@ -61,6 +63,7 @@ class AnalysisEngine:
             build_analysis_result=build_analysis_result,
             normalize_type=normalize_type,
             analyze_contract=analyze_contract,
+            enrich_report=enrich_analysis_result,
         )
 
     def check_property_type(self, property_type: str) -> None:
@@ -109,6 +112,8 @@ class AnalysisEngine:
             special_terms=special_terms,
             analysis_id=analysis_id,
         )
+        if self.enrich_report is not None:
+            result = self.enrich_report(result)
         return AnalysisOutput(result=result, notes=notes)
 
 

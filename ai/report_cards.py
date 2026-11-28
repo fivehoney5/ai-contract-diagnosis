@@ -3,10 +3,44 @@ import json
 import sys
 
 
+def build_senior_burden_card(flag, price_card):
+    ratio = price_card.get("senior_burden_ratio")
+    if ratio is None:
+        ratio = flag.get("value")
+    description = "분석 결과에서 선순위 부담률에 대한 확인이 필요해요."
+    if ratio is not None:
+        description = (
+            f"선순위 금액과 보증금의 합계가 추정 시세의 {ratio:.2%}예요."
+        )
+    deposit = price_card.get("deposit")
+    senior = price_card.get("senior_amount_used")
+    price = price_card.get("estimated_price")
+    if all(amount is not None for amount in (deposit, senior, price)) and price > 0:
+        description += f" 계산에 쓴 금액은 보증금 {deposit:,}원, 선순위 {senior:,}원, 추정 시세 {price:,}원이에요."
+    confidence_label = price_card.get("confidence_label")
+    if confidence_label:
+        description += f" ({confidence_label})"
+    return {
+        "code": flag["code"],
+        "level": flag["level"],
+        "title": "선순위 부담률 확인",
+        "description": description,
+        "actions": ["분석에 사용된 선순위 금액과 시세 산정 근거를 확인해 주세요."],
+        "evidence": [],
+    }
+
+
 def build_report(analysis):
     cards = []
+    seen = set()
     for flag in analysis.get("flags", []):
-        if flag["code"] == "SPECIAL_TERMS_CHECK_NEEDED":
+        code = flag["code"]
+        if code in seen:
+            continue
+        seen.add(code)
+        if code == "SENIOR_BURDEN_HIGH":
+            cards.append(build_senior_burden_card(flag, analysis.get("price_card") or {}))
+        elif code == "SPECIAL_TERMS_CHECK_NEEDED":
             cards.append({
                 "code": flag["code"],
                 "level": flag["level"],
@@ -15,13 +49,17 @@ def build_report(analysis):
                 "actions": ["계약서 원본에서 읽지 못한 특약을 확인해 주세요."],
                 "evidence": [],
             })
-            break
 
     return {
         "analysis_id": analysis["analysis_id"],
         "grade": analysis["grade"],
         "report_cards": cards,
     }
+
+
+def enrich_analysis_result(analysis):
+    """Add report cards before persisting the analysis."""
+    return {**analysis, "report_cards": build_report(analysis)["report_cards"]}
 
 
 if __name__ == "__main__":
